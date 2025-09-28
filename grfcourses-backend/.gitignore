@@ -1,0 +1,86 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+*.egg
+
+# Virtual environments
+venv/
+.env/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+__pypackages__/
+
+# Installer logs
+pip-log.txt
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+
+# Sphinx documentation
+docs/_build/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Arquivos de mídia e arquivos estáticos gerados
+media/
+staticfiles/
+# Se você versiona uma pasta específica de static (ex: /static/), remova/ajuste a linha acima conforme necessário.
+
+# Migrations (opcional)
+# Muitas equipes versionam migrations. Se você NÃO quiser versionar migrations, descomente abaixo:
+# */migrations/
+# Para ignorar apenas arquivos pyc dentro de migrations (mantendo os .py), use:
+# */migrations/*.pyc
+
+# IDEs / editors
+.vscode/
+.idea/
+*.sublime-*
+*.swp
+
+# System
+.DS_Store
+Thumbs.db
+
+# Node / front-end
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+/build/
+
+# Secrets / keys / env files
+*.pem
+*.key
+*.crt
+.env*
+secrets.json
+credentials.json
+
+# Other
+*.bak
+*.tmp
