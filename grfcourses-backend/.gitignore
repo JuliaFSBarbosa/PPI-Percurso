@@ -1,86 +1,47 @@
-# Byte-compiled / cache
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Arquivos Python que não devem ir pro Git
 __pycache__/
 *.py[cod]
-*$py.class
+*.sqlite3
 
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-.eggs/
-wheels/
-*.egg
-
-# Virtual environments
+# Ambientes virtuais
 venv/
 .env/
-.venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-__pypackages__/
+.env.local
 
-# Installer logs
-pip-log.txt
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Unit test / coverage
-.coverage
-.coverage.*
-htmlcov/
-.tox/
-.nox/
-.pytest_cache/
-
-# Sphinx documentation
-docs/_build/
-
-# Django
+# Logs e cache
 *.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+*.pycache/
+.cache/
 
-# Arquivos de mídia e arquivos estáticos gerados
-media/
-staticfiles/
-# Se você versiona uma pasta específica de static (ex: /static/), remova/ajuste a linha acima conforme necessário.
+# Build output
+.next/
+dist/
+out/
+build/
 
-# Migrations (opcional)
-# Muitas equipes versionam migrations. Se você NÃO quiser versionar migrations, descomente abaixo:
-# */migrations/
-# Para ignorar apenas arquivos pyc dentro de migrations (mantendo os .py), use:
-# */migrations/*.pyc
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# IDEs / editors
+# Editor configs
 .vscode/
 .idea/
-*.sublime-*
-*.swp
-
-# System
 .DS_Store
-Thumbs.db
 
-# Node / front-end
-node_modules/
-npm-debug.log
-yarn-error.log
-yarn-debug.log
-/build/
+# Logs
+logs/
+*.log
 
-# Secrets / keys / env files
-*.pem
-*.key
-*.crt
-.env*
-secrets.json
-credentials.json
-
-# Other
-*.bak
-*.tmp
+# Cache
+.cache/
+.next/cache/
