@@ -93,3 +93,28 @@
       @apply backdrop-blur-sm bg-background/80 border border-border/50;
   }
 }
+
+/* App-specific CSS variables used by pages (login and dashboard) */
+@layer base {
+  :root {
+    /* Login page */
+    --green:#24864d;
+    --green-dark:#063e25;
+    --text:#ffffff;
+    --field:#e3e3e3;
+
+    /* Dashboard (minha-tela) */
+    --bg:#0e1a16;
+    --panel:#0f2b21;
+    --panel-2:#113629;
+    --muted:#b6c9c2;
+    --brand:#0f5132;
+    --brand-2:#145a43;
+    --accent:#f1c40f;
+    --ok:#1abc9c;
+    --late:#e67e22;
+    --done:#2ecc71;
+    --warn:#e74c3c;
+    --shadow:0 10px 25px rgba(0,0,0,.35);
+  }
+}
