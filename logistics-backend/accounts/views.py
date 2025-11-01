@@ -4,6 +4,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response 
 
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.exceptions import AuthenticationFailed
 
 from accounts.models import User
 from accounts.serializers import UserSerializer

@@ -1,7 +1,10 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { signIn as signInAPI } from "@/services/auth";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET,
+  trustHost: true,
   providers: [
     Credentials({
       name: "credentials",
@@ -11,11 +14,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
-        // TODO: integrar com API real. Por enquanto, aceita qualquer par não-vazio.
+        const resp = await signInAPI({
+          // @ts-ignore
+          email: credentials.email,
+          // @ts-ignore
+          password: credentials.password,
+        });
+        if (!resp.success || !resp.data) return null;
+        const { user, access_token } = resp.data;
         return {
-          id: "1",
-          name: "Usuário",
-          email: credentials.email as string,
+          id: String(user.id),
+          name: user.name,
+          email: user.email,
+          access_token,
         } as any;
       },
     }),
@@ -28,6 +39,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         // @ts-ignore
         token.id = (user as any).id;
+        // @ts-ignore
+        token.access_token = (user as any).access_token;
       }
       return token as any;
     },
@@ -35,6 +48,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session?.user) {
         // @ts-ignore
         (session.user as any).id = (token as any).id;
+        // @ts-ignore
+        (session.user as any).access_token = (token as any).access_token;
       }
       return session as any;
     },

@@ -1,0 +1,47 @@
+# Arquivos Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ambiente virtual
+.venv/
+env/
+venv/
+
+# Arquivos de log e cache
+*.log
+*.pot
+*.py[cod]
+*.sqlite3
+db.sqlite3
+
+# Configurações locais
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Diretórios do Django
+media/
+staticfiles/
+*.bak
+*.backup
+
+# Diretórios do Next.js
+node_modules/
+.next/
+out/
+
+# Arquivos de build
+dist/
+build/
+
+# IDEs e editores
+.vscode/
+.idea/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
