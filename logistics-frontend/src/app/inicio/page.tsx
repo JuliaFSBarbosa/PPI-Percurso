@@ -1,8 +1,3 @@
-/*
-  Página: Dashboard (pós‑login)
-  Objetivo: exibir KPIs, atalhos e tabela/resumo; cabeçalho mostra nome do usuário,
-  inicial no avatar e botão Sair; menu lateral navega para as demais áreas.
-*/
 "use client";
 
 import Link from "next/link";
@@ -14,12 +9,12 @@ import styles from "./styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
 
-export default function MinhaTela() {
+export default function InicioPage() {
   const router = useRouter();
   const { data: session } = useSession();
 
   const displayName = useMemo(() => {
-    const raw = (session?.user?.name || session?.user?.email || "Usuário").toString();
+    const raw = (session?.user?.name || session?.user?.email || "Usuario").toString();
     return raw;
   }, [session?.user?.name, session?.user?.email]);
 
@@ -32,15 +27,18 @@ export default function MinhaTela() {
     <div className={`${inter.className} ${styles.wrapper}`}>
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhão" />
+          <img src="/caminhao.png" alt="Logomarca Caminhao" />
         </div>
         <nav>
-          <Link className={styles.active} aria-current="page" href="/minha-tela">Início</Link>
+          <Link className={styles.active} aria-current="page" href="/inicio">
+            Inicio
+          </Link>
           <Link href="/rotas">Rotas</Link>
           <Link href="/entregas">Entregas</Link>
           <Link href="/motoristas">Motoristas</Link>
+          <Link href="/produtos">Produtos</Link>
           <Link href="/clientes">Clientes</Link>
-          <Link href="/configuracoes">Configurações</Link>
+          <Link href="/configuracoes">Usuarios</Link>
         </nav>
       </aside>
 
@@ -91,10 +89,7 @@ export default function MinhaTela() {
         </section>
 
         <section className={styles["quick-actions"]}>
-          <button
-            className={`${styles.btn} ${styles.primary}`}
-            onClick={() => router.push("/nova-rota")}
-          >
+          <button className={`${styles.btn} ${styles.primary}`} onClick={() => router.push("/nova-rota")}>
             + Nova Rota
           </button>
           <button className={styles.btn}>+ Novo Pedido</button>
@@ -109,13 +104,55 @@ export default function MinhaTela() {
                 Ver tudo
               </Link>
             </div>
-            {/* Tabela sem espaços de texto entre tags para evitar erro de hidratação */}
-            <table><thead><tr><th>ID</th><th>Cliente</th><th>Endereço</th><th>Motorista</th><th>Status</th></tr></thead><tbody>
-              <tr><td>10234</td><td>Coop. Verde Campo</td><td>Interior de FW - Linha 21</td><td>Maria S.</td><td><span className={`${styles.badge} ${styles.ok}`}>Em rota</span></td></tr>
-              <tr><td>10235</td><td>Faz. Boa Esperança</td><td>Seberi - KM 12</td><td>João P.</td><td><span className={`${styles.badge} ${styles.late}`}>Atrasada</span></td></tr>
-              <tr><td>10236</td><td>Granja São José</td><td>Taquaruçu do Sul</td><td>Cláudia A.</td><td><span className={`${styles.badge} ${styles.ok}`}>Em rota</span></td></tr>
-              <tr><td>10237</td><td>Agro RS</td><td>FW - Linha 14</td><td>Pedro N.</td><td><span className={`${styles.badge} ${styles.done}`}>Entregue</span></td></tr>
-            </tbody></table>
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Cliente</th>
+                  <th>Endereco</th>
+                  <th>Motorista</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>10234</td>
+                  <td>Coop. Verde Campo</td>
+                  <td>Interior de FW - Linha 21</td>
+                  <td>Maria S.</td>
+                  <td>
+                    <span className={`${styles.badge} ${styles.ok}`}>Em rota</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>10235</td>
+                  <td>Faz. Boa Esperanca</td>
+                  <td>Seberi - KM 12</td>
+                  <td>Joao P.</td>
+                  <td>
+                    <span className={`${styles.badge} ${styles.late}`}>Atrasada</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>10236</td>
+                  <td>Granja Sao Jose</td>
+                  <td>Taquarucu do Sul</td>
+                  <td>Claudia A.</td>
+                  <td>
+                    <span className={`${styles.badge} ${styles.ok}`}>Em rota</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>10237</td>
+                  <td>Agro RS</td>
+                  <td>FW - Linha 14</td>
+                  <td>Pedro N.</td>
+                  <td>
+                    <span className={`${styles.badge} ${styles.done}`}>Entregue</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <div className={`${styles.card} ${styles.map}`}>

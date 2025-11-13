@@ -37,7 +37,7 @@ export default function Login() {
       email,
       password,
       redirect: false,
-      callbackUrl: "/minha-tela",
+      callbackUrl: "/inicio",
     });
     if (res?.error) {
       setErrors({ auth: "Email e/ou senha inválidos." });

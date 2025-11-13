@@ -13,7 +13,7 @@ from logistics.serializers import (
 # VIEWSETS BÁSICAS - Seguindo o padrão do LogisticsViewSet do curso
 # =============================================================================
 
-class FamiliaViewSet(viewsets.ReadOnlyModelViewSet):
+class FamiliaViewSet(viewsets.ModelViewSet):
     """
     ViewSet para famílias de produtos
     - ReadOnlyModelViewSet: apenas leitura (GET), não permite criar/editar
@@ -21,12 +21,13 @@ class FamiliaViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Familia.objects.filter(ativo=True).order_by('nome')
     serializer_class = FamiliaSerializer
-    permission_classes = [AllowAny]  # Qualquer usuário pode ver famílias
+    permission_classes = [AllowAny]  # Qualquer usuário pode ver/criar famílias
     filterset_class = FamiliaFilter
     ordering_fields = ['nome', 'created_at']  # ?ordering=nome ou ?ordering=-created_at
+    http_method_names = ['get', 'post', 'put', 'patch', 'head', 'options']
 
 
-class ProdutoViewSet(viewsets.ReadOnlyModelViewSet):
+class ProdutoViewSet(viewsets.ModelViewSet):
     """
     ViewSet para produtos
     - Filtra apenas produtos ativos por padrão
@@ -37,6 +38,7 @@ class ProdutoViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
     filterset_class = ProdutoFilter
     ordering_fields = ['nome', 'peso', 'created_at']  # ?ordering=peso
+    http_method_names = ['get', 'post', 'put', 'patch', 'head', 'options']
 
 
 # =============================================================================

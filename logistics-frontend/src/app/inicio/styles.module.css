@@ -121,3 +121,22 @@
   .kpis{ grid-template-columns:1fr; }
   .search input{ width:100%; }
 }
+.pageActions{ display:flex; gap:10px; flex-wrap:wrap; }
+.productName{ display:flex; flex-direction:column; gap:4px; }
+.productMeta{ color:var(--muted); font-size:12px; }
+.familyList{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
+.familyItem{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid rgba(255,255,255,.08); }
+.familyItem:last-child{ border-bottom:none; }
+.familyName{ display:flex; flex-direction:column; gap:4px; }
+.familyName span{ color:var(--muted); font-size:12px; }
+.familyCount{ font-weight:600; }
+.familyActions{ display:flex; align-items:center; gap:8px; }
+.userSummary{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:16px;
+  margin:10px 0 18px;
+}
+.userSummary strong{ display:block; font-size:18px; }
+.userSummary span{ color:var(--muted); font-size:13px; }
