@@ -9,7 +9,7 @@ import Link from "next/link";
 import { Inter as InterFont } from "next/font/google";
 import { useMemo } from "react";
 import { useSession, signOut } from "next-auth/react";
-import styles from "../minha-tela/styles.module.css";
+import styles from "../inicio/styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
 
@@ -25,12 +25,13 @@ export default function RotasPage() {
           <img src="/caminhao.png" alt="Logomarca Caminhão" />
         </div>
         <nav>
-          <Link href="/minha-tela">Início</Link>
+          <Link href="/inicio">Início</Link>
           <Link className={styles.active} aria-current="page" href="/rotas">Rotas</Link>
           <Link href="/entregas">Entregas</Link>
           <Link href="/motoristas">Motoristas</Link>
+          <Link href="/produtos">Produtos</Link>
           <Link href="/clientes">Clientes</Link>
-          <Link href="/configuracoes">Configurações</Link>
+          <Link href="/configuracoes">Usuarios</Link>
         </nav>
       </aside>
       <main className={styles.content}>

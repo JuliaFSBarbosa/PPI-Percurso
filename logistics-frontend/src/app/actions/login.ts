@@ -32,7 +32,7 @@ export async function loginAction(_: LoginFormState, formData: FormData): Promis
     await signIn("credentials", {
       email,
       password,
-      redirectTo: "/minha-tela",
+      redirectTo: "/inicio",
     });
     return { success: true };
   } catch (e) {

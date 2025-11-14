@@ -7,7 +7,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import AuthenticationFailed
 
 from accounts.models import User
-from accounts.serializers import UserSerializer, SignUpSerializer
+from accounts.serializers import UserSerializer, SignUpSerializer, UserAdminUpdateSerializer
+from django.shortcuts import get_object_or_404
 
 from core.utils.exceptions import ValidationError
 from core.utils.formatters import format_serializer_error
@@ -73,4 +74,35 @@ class MeView(APIView):
             user.set_password(password)
         user.save()
         return Response(UserSerializer(user).data)
+
+
+class UserAdminView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request):
+        users = User.objects.all().order_by("name")
+        return Response(UserSerializer(users, many=True).data)
+
+    def post(self, request: Request):
+        serializer = SignUpSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise ValidationError(format_serializer_error(serializer.errors))
+        user = serializer.save()
+        return Response(UserSerializer(user).data)
+
+
+class UserAdminDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, user_id: int):
+        user = get_object_or_404(User, pk=user_id)
+        return Response(UserSerializer(user).data)
+
+    def put(self, request: Request, user_id: int):
+        user = get_object_or_404(User, pk=user_id)
+        serializer = UserAdminUpdateSerializer(user, data=request.data, partial=True)
+        if not serializer.is_valid():
+            raise ValidationError(format_serializer_error(serializer.errors))
+        updated_user = serializer.save()
+        return Response(UserSerializer(updated_user).data)
 

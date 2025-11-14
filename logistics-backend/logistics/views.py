@@ -14,45 +14,33 @@ from django.shortcuts import get_object_or_404
 # ViewSets Básicos (Leitura)
 # ==========================================
 
-class FamiliaViewSet(viewsets.ReadOnlyModelViewSet):
+class FamiliaViewSet(viewsets.ModelViewSet):
     """
     ViewSet apenas leitura para Família
     """
-    # queryset = Familia.objects.all()
-    # serializer_class = FamiliaSerializer
-    
-    def list(self, request):
-        return Response({
-            'message': 'Lista de famílias',
-            'data': []
-        })
-    
-    def retrieve(self, request, pk=None):
-        return Response({
-            'message': f'Detalhes da família {pk}',
-            'data': {}
-        })
+    queryset = Familia.objects.filter(ativo=True).order_by('nome')
+    serializer_class = FamiliaSerializer
+    permission_classes = [AllowAny]  # Qualquer usuário pode ver/criar famílias
+    filterset_class = FamiliaFilter
+    ordering_fields = ['nome', 'created_at']  # ?ordering=nome ou ?ordering=-created_at
+    http_method_names = ['get', 'post', 'put', 'patch', 'head', 'options']
 
 
-class ProdutoViewSet(viewsets.ReadOnlyModelViewSet):
+class ProdutoViewSet(viewsets.ModelViewSet):
     """
     ViewSet apenas leitura para Produto
     """
-    # queryset = Produto.objects.all()
-    # serializer_class = ProdutoSerializer
-    
-    def list(self, request):
-        return Response({
-            'message': 'Lista de produtos',
-            'data': []
-        })
-    
-    def retrieve(self, request, pk=None):
-        return Response({
-            'message': f'Detalhes do produto {pk}',
-            'data': {}
-        })
+    queryset = Produto.objects.filter(ativo=True).select_related('familia').order_by('nome')
+    serializer_class = ProdutoSerializer
+    permission_classes = [AllowAny]
+    filterset_class = ProdutoFilter
+    ordering_fields = ['nome', 'peso', 'created_at']  # ?ordering=peso
+    http_method_names = ['get', 'post', 'put', 'patch', 'head', 'options']
 
+
+# =============================================================================
+# VIEWSET PRINCIPAL - Para seleção de pedidos e montagem de rotas
+# =============================================================================
 
 class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
     """
