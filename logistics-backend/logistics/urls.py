@@ -1,7 +1,14 @@
+# logistics/urls.py
+# ATUALIZAR o arquivo existente adicionando as novas rotas
+
 from rest_framework.routers import DefaultRouter
+from django.urls import path
 from logistics.views import (
     FamiliaViewSet, ProdutoViewSet, PedidoViewSet, RotaViewSet,
-    PedidoCreateViewSet, RotaCreateViewSet
+    PedidoCreateViewSet, RotaCreateViewSet,
+    # ✅ NOVOS IMPORTS
+    OtimizarRotaView,
+    CompararAlgoritmosView
 )
 
 router = DefaultRouter()
@@ -16,4 +23,8 @@ router.register(r'rotas', RotaViewSet, basename="rota")
 router.register(r'pedidos-admin', PedidoCreateViewSet, basename="pedido-admin")
 router.register(r'rotas-admin', RotaCreateViewSet, basename="rota-admin")
 
-urlpatterns = router.urls
+# ✅ NOVAS ROTAS DE OTIMIZAÇÃO
+urlpatterns = router.urls + [
+    path('otimizar-rota/', OtimizarRotaView.as_view(), name='otimizar-rota'),
+    path('comparar-algoritmos/', CompararAlgoritmosView.as_view(), name='comparar-algoritmos'),
+]

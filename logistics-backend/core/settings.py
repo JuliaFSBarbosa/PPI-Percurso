@@ -44,7 +44,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
-     'django_filters',
+    'corsheaders',  # ✅ ADICIONADO
+    'django_filters',
     
     #Apps
     'accounts',
@@ -56,7 +57,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-     "django.middleware.security.SecurityMiddleware",
+    'corsheaders.middleware.CorsMiddleware',  # ✅ ADICIONADO COMO PRIMEIRO
+    "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -167,3 +169,10 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME':timedelta(days=7)
 }
 
+# ✅ CONFIGURAÇÕES CORS ADICIONADAS
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+CORS_ALLOW_CREDENTIALS = True
