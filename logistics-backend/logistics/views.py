@@ -4,11 +4,18 @@ from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 
-# Importe seus models aqui (ajuste conforme necessário)
-# from .models import Familia, Produto, Pedido, Rota
-# from .serializers import FamiliaSerializer, ProdutoSerializer, PedidoSerializer, RotaSerializer
+from logistics.models import Familia, Produto, Pedido, Rota
+from logistics.serializers import (
+    FamiliaSerializer,
+    ProdutoSerializer,
+    PedidoSerializer,
+    PedidoCreateSerializer,
+    RotaSerializer,
+)
+from logistics.filters import FamiliaFilter, ProdutoFilter, PedidoFilter
 
 # ==========================================
 # ViewSets Básicos (Leitura)
@@ -30,7 +37,7 @@ class ProdutoViewSet(viewsets.ModelViewSet):
     """
     ViewSet apenas leitura para Produto
     """
-    queryset = Produto.objects.filter(ativo=True).select_related('familia').order_by('nome')
+    queryset = Produto.objects.select_related('familia').order_by('nome')
     serializer_class = ProdutoSerializer
     permission_classes = [AllowAny]
     filterset_class = ProdutoFilter
@@ -46,56 +53,8 @@ class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet apenas leitura para Pedido
     """
-    # queryset = Pedido.objects.all()
-    # serializer_class = PedidoSerializer
-    
-    def list(self, request):
-        # Dados de exemplo - substitua pela query real do banco
-        pedidos_exemplo = [
-            {
-                'id': 1,
-                'numero_nota': '1001',
-                'cliente_nome': 'Cliente A',
-                'peso_total': 10.5,
-                'latitude': -27.2250,
-                'longitude': -53.3450,
-                'tem_rota': False
-            },
-            {
-                'id': 2,
-                'numero_nota': '1002',
-                'cliente_nome': 'Cliente B',
-                'peso_total': 15.0,
-                'latitude': -27.2300,
-                'longitude': -53.3500,
-                'tem_rota': False
-            },
-            {
-                'id': 3,
-                'numero_nota': '1003',
-                'cliente_nome': 'Cliente C',
-                'peso_total': 20.0,
-                'latitude': -27.2200,
-                'longitude': -53.3400,
-                'tem_rota': False
-            },
-            {
-                'id': 4,
-                'numero_nota': '1004',
-                'cliente_nome': 'Cliente D',
-                'peso_total': 12.5,
-                'latitude': -27.2280,
-                'longitude': -53.3480,
-                'tem_rota': True
-            }
-        ]
-        return Response(pedidos_exemplo)
-    
-    def retrieve(self, request, pk=None):
-        return Response({
-            'message': f'Detalhes do pedido {pk}',
-            'data': {}
-        })
+    queryset = Pedido.objects.all().prefetch_related("itens__produto")
+    serializer_class = PedidoSerializer
 
 
 class RotaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -124,30 +83,11 @@ class RotaViewSet(viewsets.ReadOnlyModelViewSet):
 
 class PedidoCreateViewSet(viewsets.ModelViewSet):
     """
-    ViewSet completo para administração de Pedidos
+    ViewSet completo para administração de Pedidos com itens.
     """
-    # queryset = Pedido.objects.all()
-    # serializer_class = PedidoSerializer
-    
-    def list(self, request):
-        return Response({'message': 'Lista de pedidos (admin)', 'data': []})
-    
-    def create(self, request):
-        return Response({
-            'message': 'Pedido criado com sucesso',
-            'data': request.data
-        }, status=status.HTTP_201_CREATED)
-    
-    def update(self, request, pk=None):
-        return Response({
-            'message': f'Pedido {pk} atualizado',
-            'data': request.data
-        })
-    
-    def destroy(self, request, pk=None):
-        return Response({
-            'message': f'Pedido {pk} deletado'
-        }, status=status.HTTP_204_NO_CONTENT)
+    queryset = Pedido.objects.all().prefetch_related("itens__produto")
+    serializer_class = PedidoCreateSerializer
+    permission_classes = [AllowAny]
 
 
 class RotaCreateViewSet(viewsets.ModelViewSet):

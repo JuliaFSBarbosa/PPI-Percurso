@@ -1,7 +1,8 @@
 // Proxy para operações em uma família específica.
 import { auth } from "@/lib/auth";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const apiBaseRaw = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const apiBase = apiBaseRaw.replace(/\/+$/, "");
 const basePath = `${apiBase}/api/v1/logistics/familias/`;
 
 const buildHeaders = async (req?: Request) => {

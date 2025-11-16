@@ -9,12 +9,12 @@ import styles from "./styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
 
-export default function InicioPage() {
+export default function InícioPage() {
   const router = useRouter();
   const { data: session } = useSession();
 
   const displayName = useMemo(() => {
-    const raw = (session?.user?.name || session?.user?.email || "Usuario").toString();
+    const raw = (session?.user?.name || session?.user?.email || "Usuário").toString();
     return raw;
   }, [session?.user?.name, session?.user?.email]);
 
@@ -27,32 +27,23 @@ export default function InicioPage() {
     <div className={`${inter.className} ${styles.wrapper}`}>
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhao" />
+          <img src="/caminhao.png" alt="Logomarca Caminhão" />
         </div>
         <nav>
           <Link className={styles.active} aria-current="page" href="/inicio">
-            Inicio
+            Início
           </Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Entregas</Link>
-          <Link href="/motoristas">Motoristas</Link>
+          <Link href="/entregas">Pedidos</Link>
           <Link href="/produtos">Produtos</Link>
           <Link href="/clientes">Clientes</Link>
-          <Link href="/configuracoes">Usuarios</Link>
+          <Link href="/configuracoes">Usuários</Link>
         </nav>
       </aside>
 
       <main className={styles.content}>
         <header className={styles.topbar}>
-          <div className={styles.left}>
-            <div className={styles.search}>
-              <input
-                type="search"
-                placeholder="Buscar entregas, rotas, clientes..."
-                aria-label="Buscar"
-              />
-            </div>
-          </div>
+          <div />
           <div className={styles.right}>
             <div className={styles.user}>
               <div className={styles.avatar}>{avatarLetter}</div>
@@ -75,7 +66,7 @@ export default function InicioPage() {
 
         <section className={styles.kpis}>
           <div className={`${styles.card} ${styles.kpi}`}>
-            <h3>Entregas Hoje</h3>
+            <h3>Pedidos Hoje</h3>
             <div className={styles.value}>12</div>
           </div>
           <div className={`${styles.card} ${styles.kpi}`}>
@@ -93,13 +84,12 @@ export default function InicioPage() {
             + Nova Rota
           </button>
           <button className={styles.btn}>+ Novo Pedido</button>
-          <button className={`${styles.btn} ${styles.ghost}`}>Importar CSV</button>
         </section>
 
         <section className={styles.grid}>
           <div className={`${styles.card} ${styles.table}`}>
             <div className={styles["card-head"]}>
-              <h3>Entregas de hoje</h3>
+              <h3>Pedidos de hoje</h3>
               <Link className={`${styles.btn} ${styles.ghost} ${styles.sm}`} href="#">
                 Ver tudo
               </Link>

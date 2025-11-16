@@ -34,7 +34,7 @@ export default function NovoProdutoPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const displayName = useMemo(
-    () => (session?.user?.name || session?.user?.email || "Usuario").toString(),
+    () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
   const avatarLetter = useMemo(
@@ -140,8 +140,7 @@ export default function NovoProdutoPage() {
         <nav>
           <Link href="/inicio">Inicio</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Entregas</Link>
-          <Link href="/motoristas">Motoristas</Link>
+          <Link href="/entregas">Pedidos</Link>
           <Link className={styles.active} aria-current="page" href="/produtos">Produtos</Link>
           <Link href="/clientes">Clientes</Link>
           <Link href="/configuracoes">Usuarios</Link>
@@ -211,7 +210,7 @@ export default function NovoProdutoPage() {
               />
             </div>
             <div className={styles.field}>
-              <label htmlFor="familia">Familia</label>
+              <label htmlFor="familia">Família</label>
               <select
                 id="familia"
                 className={styles.input}
@@ -229,7 +228,7 @@ export default function NovoProdutoPage() {
               </select>
               {errors.familiaId && <small className={styles.muted}>{errors.familiaId}</small>}
             </div>
-            <div className={styles.field}>
+            <div className={`${styles.field} ${styles.inlineField}`}>
               <label htmlFor="ativo">Ativo</label>
               <input
                 id="ativo"

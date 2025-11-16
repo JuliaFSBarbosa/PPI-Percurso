@@ -25,9 +25,10 @@ export default function UsuariosPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const displayName = useMemo(
-    () => (session?.user?.name || session?.user?.email || "Usuario").toString(),
+    () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
   const avatarLetter = useMemo(
@@ -44,7 +45,7 @@ export default function UsuariosPage() {
         const resp = await fetch("/api/proxy/usuarios", { cache: "no-store", credentials: "include" });
         const raw = await resp.text();
         if (!resp.ok) {
-          throw new Error(raw || "Nao foi possivel carregar os usuarios.");
+          throw new Error(raw || "Não foi possível carregar os usuários.");
         }
         const parsed = raw ? JSON.parse(raw) : [];
         let list: AdminUser[] = [];
@@ -60,7 +61,7 @@ export default function UsuariosPage() {
       } catch (err) {
         if (!active) return;
         setUsers([]);
-        setError(err instanceof Error ? err.message : "Falha ao carregar usuarios.");
+        setError(err instanceof Error ? err.message : "Falha ao carregar usuários.");
       } finally {
         if (active) setLoading(false);
       }
@@ -75,17 +76,16 @@ export default function UsuariosPage() {
     <div className={`${inter.className} ${styles.wrapper}`}>
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhao" />
+          <img src="/caminhao.png" alt="Logomarca Caminhão" />
         </div>
         <nav>
-          <Link href="/inicio">Inicio</Link>
+          <Link href="/inicio">Início</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Entregas</Link>
-          <Link href="/motoristas">Motoristas</Link>
+          <Link href="/entregas">Pedidos</Link>
           <Link href="/produtos">Produtos</Link>
           <Link href="/clientes">Clientes</Link>
           <Link className={styles.active} aria-current="page" href="/configuracoes">
-            Usuarios
+            Usuários
           </Link>
         </nav>
       </aside>
@@ -93,7 +93,7 @@ export default function UsuariosPage() {
       <main className={styles.content}>
         <header className={styles.topbar}>
           <div className={styles.left}>
-            <h2>Usuarios</h2>
+          <h2>Usuários</h2>
           </div>
           <div className={styles.right}>
             <div className={styles.pageActions}>
@@ -102,7 +102,7 @@ export default function UsuariosPage() {
                 className={`${styles.btn} ${styles.primary}`}
                 onClick={() => router.push("/configuracoes/usuarios/novo")}
               >
-                + Novo usuario
+                + Novo usuário
               </button>
             </div>
             <div className={styles.user}>
@@ -124,7 +124,7 @@ export default function UsuariosPage() {
 
         <section className={`${styles.card} ${styles.table}`}>
           <div className={styles["card-head"]}>
-            <h3>Usuarios cadastrados</h3>
+            <h3>Usuários cadastrados</h3>
           </div>
           {error && <p className={styles.muted}>{error}</p>}
           <table>
@@ -133,18 +133,18 @@ export default function UsuariosPage() {
                 <th>Nome</th>
                 <th>Email</th>
                 <th>Perfil</th>
-                <th></th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={4}>Carregando usuarios...</td>
+                  <td colSpan={4}>Carregando usuários...</td>
                 </tr>
               )}
               {!loading && users.length === 0 && (
                 <tr>
-                  <td colSpan={4}>Nenhum usuario encontrado.</td>
+                  <td colSpan={4}>Nenhum usuário encontrado.</td>
                 </tr>
               )}
               {!loading &&
@@ -154,7 +154,7 @@ export default function UsuariosPage() {
                     <td>{user.email}</td>
                     <td>
                       <span className={roleBadge(user.is_superuser)}>
-                        {user.is_superuser ? "Administrador" : "Padrao"}
+                        {user.is_superuser ? "Administrador" : "Padrão"}
                       </span>
                     </td>
                     <td>
@@ -172,6 +172,33 @@ export default function UsuariosPage() {
                         }
                       >
                         Editar
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                        disabled={deletingId === user.id}
+                        onClick={async () => {
+                          if (!confirm(`Excluir o usuário "${user.name}"?`)) return;
+                          setError(null);
+                          setDeletingId(user.id);
+                          try {
+                            const resp = await fetch(`/api/proxy/usuarios/${user.id}`, {
+                              method: "DELETE",
+                              credentials: "include",
+                            });
+                            if (!resp.ok) {
+                              const text = await resp.text();
+                              throw new Error(text || "Falha ao excluir usuário.");
+                            }
+                            setUsers((prev) => prev.filter((u) => u.id !== user.id));
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Erro ao excluir usuário.");
+                          } finally {
+                            setDeletingId(null);
+                          }
+                        }}
+                      >
+                        {deletingId === user.id ? "Excluindo..." : "Excluir"}
                       </button>
                     </td>
                   </tr>

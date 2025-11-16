@@ -68,8 +68,7 @@ export default function NovaFamiliaPage() {
         <nav>
           <Link href="/inicio">Inicio</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Entregas</Link>
-          <Link href="/motoristas">Motoristas</Link>
+          <Link href="/entregas">Pedidos</Link>
           <Link className={styles.active} aria-current="page" href="/produtos">Produtos</Link>
           <Link href="/clientes">Clientes</Link>
           <Link href="/configuracoes">Usuarios</Link>
@@ -123,7 +122,7 @@ export default function NovaFamiliaPage() {
                 onChange={(e) => setForm((prev) => ({ ...prev, descricao: e.target.value }))}
               />
             </div>
-            <div className={styles.field}>
+            <div className={`${styles.field} ${styles.inlineField}`}>
               <label htmlFor="ativo">Ativo</label>
               <input
                 id="ativo"

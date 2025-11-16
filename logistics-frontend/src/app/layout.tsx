@@ -16,7 +16,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Percurso",
   description: "Sistema para geração de rotas.",
-};
+  icons: {
+    icon: "/caminhao.png",
+    shortcut: "/caminhao.png",
+    apple: "/caminhao.png"
+  }
+}
 
 export default function RootLayout({
   children,

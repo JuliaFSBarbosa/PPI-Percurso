@@ -146,8 +146,7 @@ export default function EditarUsuarioPage() {
         <nav>
           <Link href="/inicio">Inicio</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Entregas</Link>
-          <Link href="/motoristas">Motoristas</Link>
+          <Link href="/entregas">Pedidos</Link>
           <Link href="/produtos">Produtos</Link>
           <Link className={styles.active} aria-current="page" href="/configuracoes">
             Usuarios
@@ -230,7 +229,7 @@ export default function EditarUsuarioPage() {
                   disabled={loading}
                 />
               </div>
-              <div className={styles.field}>
+              <div className={`${styles.field} ${styles.inlineField}`}>
                 <label htmlFor="is_superuser">Administrador</label>
                 <input
                   id="is_superuser"
