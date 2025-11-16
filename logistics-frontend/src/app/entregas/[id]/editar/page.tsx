@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -218,7 +218,6 @@ export default function EditarPedidoPage() {
             Pedidos
           </Link>
           <Link href="/produtos">Produtos</Link>
-          <Link href="/clientes">Clientes</Link>
           <Link href="/configuracoes">Usuarios</Link>
         </nav>
       </aside>
@@ -363,3 +362,4 @@ export default function EditarPedidoPage() {
     </div>
   );
 }
+

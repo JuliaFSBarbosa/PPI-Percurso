@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response 
@@ -105,4 +106,10 @@ class UserAdminDetailView(APIView):
             raise ValidationError(format_serializer_error(serializer.errors))
         updated_user = serializer.save()
         return Response(UserSerializer(updated_user).data)
+
+    def delete(self, request: Request, user_id: int):
+        user = get_object_or_404(User, pk=user_id)
+        user.delete()
+        # Retornamos 200 com payload para evitar problemas de renderização/clients com body vazio em 204.
+        return Response({"detail": "Usuário removido com sucesso."}, status=status.HTTP_200_OK)
 

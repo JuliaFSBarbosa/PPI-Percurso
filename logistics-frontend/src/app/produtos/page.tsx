@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -95,17 +95,13 @@ export default function ProdutosPage() {
           <Link className={styles.active} aria-current="page" href="/produtos">
             Produtos
           </Link>
-          <Link href="/clientes">Clientes</Link>
           <Link href="/configuracoes">Usuários</Link>
         </nav>
       </aside>
 
       <main className={styles.content}>
         <header className={styles.topbar}>
-          <div className={styles.left}>
-            <h2>Produtos</h2>
-          </div>
-          <div className={styles.right}>
+          <div className={styles.topbarLeft}>
             <div className={styles.pageActions}>
               <button
                 type="button"
@@ -122,6 +118,8 @@ export default function ProdutosPage() {
                 + Nova família
               </button>
             </div>
+          </div>
+          <div className={styles.right}>
             <div className={styles.user}>
               <div className={styles.avatar}>{avatarLetter}</div>
               <div className={styles.info}>
@@ -264,3 +262,4 @@ export default function ProdutosPage() {
     </div>
   );
 }
+

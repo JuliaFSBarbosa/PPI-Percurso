@@ -94,12 +94,11 @@
   }
 }
 
-/* App-specific CSS variables used by pages (login and dashboard) */
 @layer base {
   :root {
     /* Login page */
-    --green:#24864d;
-    --green-dark:#063e25;
+    --green:#041914;
+    --green-dark:#06402C;
     --text:#ffffff;
     --field:#e3e3e3;
 

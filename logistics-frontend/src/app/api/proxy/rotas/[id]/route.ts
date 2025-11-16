@@ -1,11 +1,10 @@
 import { auth } from "@/lib/auth";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
-const readPath = `${apiBase}/api/v1/accounts/users/`;
-// Alguns ambientes expõem os métodos de escrita no mesmo endpoint de leitura.
-const writePath = `${apiBase}/api/v1/accounts/users/`;
+const apiBaseRaw = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const apiBase = apiBaseRaw.replace(/\/+$/, "");
+const readPath = `${apiBase}/api/v1/logistics/rotas/`;
+const writePath = `${apiBase}/api/v1/logistics/rotas-admin/`;
 
-// Monta headers com Authorization (quando há sessão) e Content-Type herdado da requisição.
 const buildHeaders = async (req?: Request) => {
   const session = await auth();
   const token = (session as any)?.user?.access_token as string | undefined;

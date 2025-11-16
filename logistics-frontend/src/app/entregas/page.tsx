@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -36,6 +36,8 @@ export default function PedidosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [info, setInfo] = useState<string | null>(null);
 
   const displayName = useMemo(
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
@@ -51,6 +53,8 @@ export default function PedidosPage() {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setInfo(null);
+      setSelectedIds([]);
       try {
         const resp = await fetch("/api/proxy/pedidos", { cache: "no-store" });
         const raw = await resp.text();
@@ -63,6 +67,7 @@ export default function PedidosPage() {
         if (!active) return;
         setPedidos([]);
         setError(err instanceof Error ? err.message : "Falha ao carregar pedidos.");
+        setInfo(null);
       } finally {
         if (active) setLoading(false);
       }
@@ -86,18 +91,29 @@ export default function PedidosPage() {
             Pedidos
           </Link>
           <Link href="/produtos">Produtos</Link>
-          <Link href="/clientes">Clientes</Link>
           <Link href="/configuracoes">Usuarios</Link>
         </nav>
       </aside>
 
       <main className={styles.content}>
         <header className={styles.topbar}>
-          <div className={styles.left}>
-            <h2>Pedidos</h2>
-          </div>
-          <div className={styles.right}>
+          <div className={styles.topbarLeft}>
             <div className={styles.pageActions}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.ghost}`}
+                disabled={selectedIds.length === 0}
+                onClick={() => {
+                  setError(null);
+                  setInfo(
+                    selectedIds.length > 1
+                      ? `Geração de rotas simulada para ${selectedIds.length} pedidos.`
+                      : `Geração de rota simulada para o pedido ${selectedIds[0]}.`
+                  );
+                }}
+              >
+                Gerar rota
+              </button>
               <button
                 type="button"
                 className={`${styles.btn} ${styles.primary}`}
@@ -106,6 +122,8 @@ export default function PedidosPage() {
                 + Novo pedido
               </button>
             </div>
+          </div>
+          <div className={styles.right}>
             <div className={styles.user}>
               <div className={styles.avatar}>{avatarLetter}</div>
               <div className={styles.info}>
@@ -128,9 +146,19 @@ export default function PedidosPage() {
             <h3>Pedidos cadastrados</h3>
           </div>
           {error && <p className={styles.muted}>{error}</p>}
+          {!error && info && <p className={styles.muted}>{info}</p>}
           <table>
             <thead>
               <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    aria-label="Selecionar todos os pedidos"
+                    disabled={loading || pedidos.length === 0}
+                    checked={!loading && pedidos.length > 0 && selectedIds.length === pedidos.length}
+                    onChange={(e) => setSelectedIds(e.target.checked ? pedidos.map((p) => p.id) : [])}
+                  />
+                </th>
                 <th>ID</th>
                 <th>NF</th>
                 <th>Data</th>
@@ -154,6 +182,18 @@ export default function PedidosPage() {
               {!loading &&
                 pedidos.map((pedido) => (
                   <tr key={pedido.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Selecionar pedido ${pedido.id}`}
+                        checked={selectedIds.includes(pedido.id)}
+                        onChange={(e) =>
+                          setSelectedIds((prev) =>
+                            e.target.checked ? [...prev, pedido.id] : prev.filter((id) => id !== pedido.id)
+                          )
+                        }
+                      />
+                    </td>
                     <td>{pedido.id}</td>
                     <td>{pedido.nf}</td>
                     <td>{pedido.dtpedido}</td>
@@ -176,6 +216,7 @@ export default function PedidosPage() {
                           onClick={async () => {
                             if (!confirm(`Excluir o pedido ${pedido.id}?`)) return;
                             setError(null);
+                            setInfo(null);
                             setDeletingId(pedido.id);
                             try {
                               const resp = await fetch(`/api/proxy/pedidos/${pedido.id}`, {
@@ -187,6 +228,7 @@ export default function PedidosPage() {
                                 throw new Error(parseError(text, "Falha ao excluir pedido.", resp.status));
                               }
                               setPedidos((prev) => prev.filter((p) => p.id !== pedido.id));
+                              setSelectedIds((prev) => prev.filter((id) => id !== pedido.id));
                             } catch (err) {
                               setError(err instanceof Error ? err.message : "Erro ao excluir pedido.");
                             } finally {

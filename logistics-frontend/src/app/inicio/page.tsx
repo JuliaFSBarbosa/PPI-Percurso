@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -36,14 +36,30 @@ export default function InícioPage() {
           <Link href="/rotas">Rotas</Link>
           <Link href="/entregas">Pedidos</Link>
           <Link href="/produtos">Produtos</Link>
-          <Link href="/clientes">Clientes</Link>
           <Link href="/configuracoes">Usuários</Link>
         </nav>
       </aside>
 
       <main className={styles.content}>
         <header className={styles.topbar}>
-          <div />
+          <div className={styles.topbarLeft}>
+            <div className={styles.pageActions}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.primary}`}
+                onClick={() => router.push("/nova-rota")}
+              >
+                + Nova Rota
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.ghost}`}
+                onClick={() => router.push("/entregas/novo")}
+              >
+                + Novo Pedido
+              </button>
+            </div>
+          </div>
           <div className={styles.right}>
             <div className={styles.user}>
               <div className={styles.avatar}>{avatarLetter}</div>
@@ -77,13 +93,6 @@ export default function InícioPage() {
             <h3>Atrasadas</h3>
             <div className={styles.value}>9</div>
           </div>
-        </section>
-
-        <section className={styles["quick-actions"]}>
-          <button className={`${styles.btn} ${styles.primary}`} onClick={() => router.push("/nova-rota")}>
-            + Nova Rota
-          </button>
-          <button className={styles.btn}>+ Novo Pedido</button>
         </section>
 
         <section className={styles.grid}>
@@ -164,3 +173,4 @@ export default function InícioPage() {
     </div>
   );
 }
+
