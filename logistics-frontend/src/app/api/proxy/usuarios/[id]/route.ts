@@ -1,9 +1,10 @@
-// Proxy para operações em um usuário específico.
+// Proxy para operações em um usuário específico, reaproveitando o token do NextAuth.
 import { auth } from "@/lib/auth";
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
 const basePath = `${apiBase}/api/v1/accounts/users/`;
 
+// Monta headers com Authorization (quando há sessão) e Content-Type herdado da requisição.
 const buildHeaders = async (req?: Request) => {
   const session = await auth();
   const token = (session as any)?.user?.access_token as string | undefined;
