@@ -43,3 +43,16 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     headers: { "Content-Type": upstream.headers.get("content-type") || "application/json" },
   });
 }
+
+export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+  const hdr = await buildHeaders();
+  const upstream = await fetch(`${basePath}${params.id}/`, {
+    method: "DELETE",
+    headers: hdr,
+  });
+  const text = await upstream.text();
+  return new Response(text, {
+    status: upstream.status,
+    headers: { "Content-Type": upstream.headers.get("content-type") || "application/json" },
+  });
+}

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -188,12 +188,10 @@ export default function EditarProdutoPage() {
         <nav>
           <Link href="/inicio">Inicio</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Entregas</Link>
-          <Link href="/motoristas">Motoristas</Link>
+          <Link href="/entregas">Pedidos</Link>
           <Link className={styles.active} aria-current="page" href="/produtos">
             Produtos
           </Link>
-          <Link href="/clientes">Clientes</Link>
           <Link href="/configuracoes">Usuarios</Link>
         </nav>
       </aside>
@@ -285,7 +283,7 @@ export default function EditarProdutoPage() {
               </select>
               {errors.familiaId && <small className={styles.muted}>{errors.familiaId}</small>}
             </div>
-            <div className={styles.field}>
+            <div className={`${styles.field} ${styles.inlineField}`}>
               <label htmlFor="ativo">Ativo</label>
               <input
                 id="ativo"
@@ -308,3 +306,4 @@ export default function EditarProdutoPage() {
     </div>
   );
 }
+

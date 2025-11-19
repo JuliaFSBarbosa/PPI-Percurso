@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -24,11 +24,11 @@ const formatError = (raw: string, fallback: string) => {
   return raw || fallback;
 };
 
-export default function NovoUsuarioPage() {
+export default function NovoUsuárioPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const displayName = useMemo(
-    () => (session?.user?.name || session?.user?.email || "Usuario").toString(),
+    () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
   const avatarLetter = useMemo(
@@ -53,7 +53,7 @@ export default function NovoUsuarioPage() {
 
     setSubmitting(true);
     try {
-      const resp = await fetch("/api/proxy/usuarios", {
+      const resp = await fetch("/api/proxy/Usuários", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -66,9 +66,9 @@ export default function NovoUsuarioPage() {
       });
       if (!resp.ok) {
         const text = await resp.text();
-        throw new Error(formatError(text, "Falha ao cadastrar usuario."));
+        throw new Error(formatError(text, "Falha ao cadastrar Usuário."));
       }
-      setMessage("Usuario criado com sucesso.");
+      setMessage("Usuário criado com sucesso.");
       setForm({ name: "", email: "", password: "", is_superuser: false });
       setTimeout(() => router.push("/configuracoes"), 1200);
     } catch (err) {
@@ -87,18 +87,17 @@ export default function NovoUsuarioPage() {
         <nav>
           <Link href="/inicio">Inicio</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Entregas</Link>
-          <Link href="/motoristas">Motoristas</Link>
+          <Link href="/entregas">Pedidos</Link>
           <Link href="/produtos">Produtos</Link>
           <Link className={styles.active} aria-current="page" href="/configuracoes">
-            Usuarios
+            Usuários
           </Link>
         </nav>
       </aside>
       <main className={styles.content}>
         <header className={styles.topbar}>
           <div>
-            <h2>Novo usuario</h2>
+            <h2>Novo Usuário</h2>
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
@@ -160,12 +159,14 @@ export default function NovoUsuarioPage() {
             </div>
             <div className={styles.field}>
               <label htmlFor="is_superuser">Administrador</label>
-              <input
-                id="is_superuser"
-                type="checkbox"
-                checked={form.is_superuser}
-                onChange={(e) => setForm((prev) => ({ ...prev, is_superuser: e.target.checked }))}
-              />
+              <div className={styles.inlineField}>
+                <input
+                  id="is_superuser"
+                  type="checkbox"
+                  checked={form.is_superuser}
+                  onChange={(e) => setForm((prev) => ({ ...prev, is_superuser: e.target.checked }))}
+                />
+              </div>
             </div>
             {message && <p className={styles.muted}>{message}</p>}
             <div className={styles["quick-actions"]}>
@@ -179,3 +180,4 @@ export default function NovoUsuarioPage() {
     </div>
   );
 }
+

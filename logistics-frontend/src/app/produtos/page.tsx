@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -34,9 +34,10 @@ export default function ProdutosPage() {
   const [familias, setFamilias] = useState<Familia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const displayName = useMemo(
-    () => (session?.user?.name || session?.user?.email || "Usuario").toString(),
+    () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
 
@@ -55,12 +56,12 @@ export default function ProdutosPage() {
           fetch("/api/proxy/produtos", { cache: "no-store" }),
           fetch("/api/proxy/familias", { cache: "no-store" }),
         ]);
-        if (!prodResp.ok) throw new Error("Nao foi possivel carregar os produtos.");
-        if (!famResp.ok) throw new Error("Nao foi possivel carregar as familias.");
+        if (!prodResp.ok) throw new Error("Não foi possível carregar os produtos.");
+        if (!famResp.ok) throw new Error("Não foi possível carregar as famílias.");
         const prodJson = (await prodResp.json()) as API<APIGetProdutosResponse>;
         const famJson = (await famResp.json()) as API<APIGetFamiliasResponse>;
         if (!prodJson.success) throw new Error(prodJson.detail || "Erro ao buscar produtos.");
-        if (!famJson.success) throw new Error(famJson.detail || "Erro ao buscar familias.");
+        if (!famJson.success) throw new Error(famJson.detail || "Erro ao buscar famílias.");
         if (!active) return;
         const productsData = prodJson.data?.results ?? [];
         const familiesData = famJson.data?.results ?? [];
@@ -85,26 +86,22 @@ export default function ProdutosPage() {
     <div className={`${inter.className} ${styles.wrapper}`}>
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhao" />
+          <img src="/caminhao.png" alt="Logomarca Caminhão" />
         </div>
         <nav>
-          <Link href="/inicio">Inicio</Link>
+          <Link href="/inicio">Início</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Entregas</Link>
-          <Link href="/motoristas">Motoristas</Link>
-          <Link className={styles.active} aria-current="page" href="/produtos">Produtos</Link>
-          <Link href="/clientes">Clientes</Link>
-          <Link href="/configuracoes">Usuarios</Link>
+          <Link href="/entregas">Pedidos</Link>
+          <Link className={styles.active} aria-current="page" href="/produtos">
+            Produtos
+          </Link>
+          <Link href="/configuracoes">Usuários</Link>
         </nav>
       </aside>
 
       <main className={styles.content}>
         <header className={styles.topbar}>
-          <div className={styles.left}>
-            <h2>Produtos</h2>
-            <p className={styles.muted}>Visao geral do portfolio cadastrado.</p>
-          </div>
-          <div className={styles.right}>
+          <div className={styles.topbarLeft}>
             <div className={styles.pageActions}>
               <button
                 type="button"
@@ -118,9 +115,11 @@ export default function ProdutosPage() {
                 className={`${styles.btn} ${styles.ghost}`}
                 onClick={() => router.push("/produtos/familias/novo")}
               >
-                + Nova familia
+                + Nova família
               </button>
             </div>
+          </div>
+          <div className={styles.right}>
             <div className={styles.user}>
               <div className={styles.avatar}>{avatarLetter}</div>
               <div className={styles.info}>
@@ -147,24 +146,24 @@ export default function ProdutosPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Codigo</th>
+                  <th>Código</th>
                   <th>Produto</th>
-                  <th>Familia</th>
+                  <th>Família</th>
                   <th>Peso</th>
                   <th>Volume</th>
                   <th>Status</th>
-                  <th />
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={6}>Carregando produtos...</td>
+                    <td colSpan={7}>Carregando produtos...</td>
                   </tr>
                 )}
                 {!loading && produtos.length === 0 && (
                   <tr>
-                    <td colSpan={6}>Nenhum produto cadastrado.</td>
+                    <td colSpan={7}>Nenhum produto cadastrado.</td>
                   </tr>
                 )}
                 {!loading &&
@@ -185,13 +184,41 @@ export default function ProdutosPage() {
                         </span>
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-                          onClick={() => router.push(`/produtos/${product.id}/editar`)}
-                        >
-                          Editar
-                        </button>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                            onClick={() => router.push(`/produtos/${product.id}/editar`)}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                            disabled={deletingId === product.id}
+                            onClick={async () => {
+                              if (!confirm(`Excluir o produto "${product.nome}"?`)) return;
+                              setError(null);
+                              setDeletingId(product.id);
+                              try {
+                                const resp = await fetch(`/api/proxy/produtos/${product.id}`, {
+                                  method: "DELETE",
+                                });
+                                if (!resp.ok) {
+                                  const text = await resp.text();
+                                  throw new Error(text || "Falha ao excluir produto.");
+                                }
+                                setProdutos((prev) => prev.filter((p) => p.id !== product.id));
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : "Erro ao excluir produto.");
+                              } finally {
+                                setDeletingId(null);
+                              }
+                            }}
+                          >
+                            {deletingId === product.id ? "Excluindo..." : "Excluir"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -201,13 +228,13 @@ export default function ProdutosPage() {
 
           <div className={styles.card}>
             <div className={styles["card-head"]}>
-              <h3>Familias</h3>
+              <h3>Famílias</h3>
             </div>
             <ul className={styles.familyList}>
-              {loading && <li className={styles.familyItem}>Carregando familias...</li>}
+              {loading && <li className={styles.familyItem}>Carregando famílias...</li>}
               {!loading && familias.length === 0 && (
                 <li className={styles.familyItem}>
-                  <span className={styles.familyName}>Nenhuma familia cadastrada.</span>
+                  <span className={styles.familyName}>Nenhuma família cadastrada.</span>
                 </li>
               )}
               {!loading &&
@@ -215,12 +242,9 @@ export default function ProdutosPage() {
                   <li key={family.id} className={styles.familyItem}>
                     <div className={styles.familyName}>
                       <strong>{family.nome}</strong>
-                      <span>{family.descricao ?? "Sem descricao"}</span>
+                      <span>{family.descricao ?? "Sem descrição"}</span>
                     </div>
                     <div className={styles.familyActions}>
-                      <span className={styles.familyCount}>
-                        {family.total_produtos} {family.total_produtos === 1 ? "item" : "itens"}
-                      </span>
                       <button
                         type="button"
                         className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
@@ -238,3 +262,4 @@ export default function ProdutosPage() {
     </div>
   );
 }
+

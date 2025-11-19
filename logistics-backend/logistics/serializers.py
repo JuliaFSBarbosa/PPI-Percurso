@@ -136,7 +136,7 @@ class PedidoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'usuario', 'usuario_id', 'nf', 'observacao', 'dtpedido',
             'latitude', 'longitude', 'created_at', 'itens', 'peso_total',
-            'volume_total', 'total_itens'
+            'volume_total', 'total_itens', 'distancia_km'
         ]
     
     def get_peso_total(self, obj):
@@ -334,6 +334,26 @@ class PedidoCreateSerializer(serializers.ModelSerializer):
             )
         
         return pedido
+
+    def update(self, instance, validated_data):
+        """
+        Atualiza pedido e substitui itens pelo payload recebido.
+        """
+        itens_data = validated_data.pop('itens', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if itens_data is not None:
+            # Remove itens antigos e recria conforme payload
+            instance.itens.all().delete()
+            for item_data in itens_data:
+                ProdutoPedido.objects.create(
+                    pedido=instance,
+                    produto_id=item_data['produto_id'],
+                    quantidade=item_data['quantidade']
+                )
+        return instance
 
 
 class RotaCreateSerializer(serializers.ModelSerializer):
