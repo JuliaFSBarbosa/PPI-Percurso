@@ -1,30 +1,43 @@
-# logistics/urls.py
-# ATUALIZAR o arquivo existente adicionando as novas rotas
-
+# logistics-backend/logistics/urls.py
+from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from django.urls import path
-from logistics.views import (
-    FamiliaViewSet, ProdutoViewSet, PedidoViewSet, RotaViewSet,
-    PedidoCreateViewSet, RotaCreateViewSet,
-    # ✅ NOVOS IMPORTS
-    OtimizarRotaView,
-    CompararAlgoritmosView
+from .views import (
+    FamiliaViewSet,
+    ProdutoViewSet,
+    PedidoViewSet,
+    RotaViewSet,
+    PedidoCreateViewSet,
+    RotaCreateViewSet,
+    GerarPDFRotaView,
+)
+from .otimizacao_views import (
+    OtimizarRotaGeneticoView,
+    SalvarRotaOtimizadaView,
+    CompararAlgoritmosView,
 )
 
 router = DefaultRouter()
 
-# ViewSets apenas leitura (GET)
-router.register(r'familias', FamiliaViewSet, basename="familia")
-router.register(r'produtos', ProdutoViewSet, basename="produto")
-router.register(r'pedidos', PedidoViewSet, basename="pedido")
-router.register(r'rotas', RotaViewSet, basename="rota")
+# ViewSets de leitura (Read-Only)
+router.register(r'familias', FamiliaViewSet, basename='familia')
+router.register(r'produtos', ProdutoViewSet, basename='produto')
+router.register(r'pedidos', PedidoViewSet, basename='pedido')
+router.register(r'rotas', RotaViewSet, basename='rota')
 
-# ViewSets para criação (POST/PUT/DELETE)
-router.register(r'pedidos-admin', PedidoCreateViewSet, basename="pedido-admin")
-router.register(r'rotas-admin', RotaCreateViewSet, basename="rota-admin")
+# ViewSets de escrita (Admin)
+router.register(r'familias-admin', FamiliaViewSet, basename='familia-admin')
+router.register(r'produtos-admin', ProdutoViewSet, basename='produto-admin')
+router.register(r'pedidos-admin', PedidoCreateViewSet, basename='pedido-admin')
+router.register(r'rotas-admin', RotaCreateViewSet, basename='rota-admin')
 
-# ✅ NOVAS ROTAS DE OTIMIZAÇÃO
-urlpatterns = router.urls + [
-    path('otimizar-rota/', OtimizarRotaView.as_view(), name='otimizar-rota'),
+urlpatterns = [
+    path('', include(router.urls)),
+    
+    # ⭐ Rotas de Otimização com Algoritmo Genético
+    path('otimizar-rota-genetico/', OtimizarRotaGeneticoView.as_view(), name='otimizar-rota-genetico'),
+    path('salvar-rota-otimizada/', SalvarRotaOtimizadaView.as_view(), name='salvar-rota-otimizada'),
     path('comparar-algoritmos/', CompararAlgoritmosView.as_view(), name='comparar-algoritmos'),
+    
+    # Geração de PDF
+    path('gerar-pdf-rota/', GerarPDFRotaView.as_view(), name='gerar-pdf-rota'),
 ]

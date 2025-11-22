@@ -1,11 +1,19 @@
-﻿"use client";
+﻿// logistics-frontend/src/app/entregas/novo/page.tsx (ATUALIZADO)
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
+import dynamic from "next/dynamic";
 import styles from "../../inicio/styles.module.css";
+
+// Importa o componente do mapa dinamicamente (client-side only)
+const MapLocationPicker = dynamic(
+  () => import("@/components/MapLocationPicker").then((mod) => ({ default: mod.MapLocationPicker })),
+  { ssr: false, loading: () => <div>Carregando mapa...</div> }
+);
 
 const inter = InterFont({ subsets: ["latin"] });
 
@@ -54,6 +62,7 @@ export default function NovoPedidoPage() {
   const [loadingProdutos, setLoadingProdutos] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showMap, setShowMap] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -88,6 +97,14 @@ export default function NovoPedidoPage() {
     setItens((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
   };
 
+  const handleLocationSelect = (coords: { latitude: number; longitude: number }) => {
+    setForm((prev) => ({
+      ...prev,
+      latitude: String(coords.latitude),
+      longitude: String(coords.longitude),
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -112,7 +129,7 @@ export default function NovoPedidoPage() {
     const latNum = sanitizeNumber(form.latitude);
     const lngNum = sanitizeNumber(form.longitude);
     if (latNum === null || lngNum === null) {
-      setError("Informe latitude e longitude válidas (use ponto ou vírgula).");
+      setError("Informe latitude e longitude válidas (use ponto ou vírgula, ou selecione no mapa).");
       return;
     }
 
@@ -165,6 +182,7 @@ export default function NovoPedidoPage() {
         <nav>
           <Link href="/inicio">Inicio</Link>
           <Link href="/rotas">Rotas</Link>
+          <Link href="\nova-rota">Nova Rota</Link>
           <Link className={styles.active} aria-current="page" href="/entregas">
             Pedidos
           </Link>
@@ -228,6 +246,8 @@ export default function NovoPedidoPage() {
                 onChange={(e) => setForm((prev) => ({ ...prev, observacao: e.target.value }))}
               />
             </div>
+
+            <h4>📍 Localização de Entrega</h4>
             <div className={styles.cards3}>
               <div className={styles.field}>
                 <label htmlFor="lat">Latitude</label>
@@ -247,7 +267,30 @@ export default function NovoPedidoPage() {
                   onChange={(e) => setForm((prev) => ({ ...prev, longitude: e.target.value }))}
                 />
               </div>
+              <div className={styles.field}>
+                <label>&nbsp;</label>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.ghost}`}
+                  onClick={() => setShowMap(!showMap)}
+                >
+                  {showMap ? "🗺️ Ocultar Mapa" : "🗺️ Selecionar no Mapa"}
+                </button>
+              </div>
             </div>
+
+            {showMap && (
+              <div style={{ marginTop: "16px", marginBottom: "16px" }}>
+                <MapLocationPicker
+                  initialCoords={
+                    form.latitude && form.longitude
+                      ? { latitude: Number(form.latitude), longitude: Number(form.longitude) }
+                      : undefined
+                  }
+                  onLocationSelect={handleLocationSelect}
+                />
+              </div>
+            )}
 
             <h4>Itens</h4>
             {itens.map((item, idx) => (
@@ -309,4 +352,3 @@ export default function NovoPedidoPage() {
     </div>
   );
 }
-

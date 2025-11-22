@@ -164,3 +164,175 @@ class RotaTrajeto(models.Model):
         verbose_name = 'Trajeto da Rota'
         verbose_name_plural = 'Trajetos das Rotas'
         ordering = ['rota', 'datahora']
+
+# Adicione este model no seu models.py
+
+class RestricaoFamilia(models.Model):
+    """
+    Define incompatibilidades entre famílias de produtos
+    Exemplo: Alimentos não podem ser transportados com Produtos Químicos
+    """
+    familia_origem = models.ForeignKey(
+        Familia,
+        related_name='restricoes_como_origem',
+        on_delete=models.CASCADE,
+        verbose_name='Família de Origem'
+    )
+    familia_restrita = models.ForeignKey(
+        Familia,
+        related_name='restricoes_como_destino',
+        on_delete=models.CASCADE,
+        verbose_name='Família Incompatível'
+    )
+    motivo = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text='Motivo da incompatibilidade'
+    )
+    ativo = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.familia_origem.nome} ≠ {self.familia_restrita.nome}"
+    
+    class Meta:
+        verbose_name = 'Restrição de Família'
+        verbose_name_plural = 'Restrições de Famílias'
+        unique_together = ('familia_origem', 'familia_restrita')
+        ordering = ['familia_origem__nome']
+    
+    def clean(self):
+        """Validação customizada"""
+        from django.core.exceptions import ValidationError
+        
+        # Não pode criar restrição de uma família com ela mesma
+        if self.familia_origem == self.familia_restrita:
+            raise ValidationError('Uma família não pode ser incompatível com ela mesma.')
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+# ======================================================
+# MÉTODO HELPER PARA VERIFICAR COMPATIBILIDADE
+# ======================================================
+
+def verificar_compatibilidade_familias(familias_pedido1, familias_pedido2):
+    """
+    Verifica se duas listas de famílias são compatíveis
+    
+    Args:
+        familias_pedido1: Set ou List de IDs de famílias do pedido 1
+        familias_pedido2: Set ou List de IDs de famílias do pedido 2
+    
+    Returns:
+        tuple: (bool compatível, str motivo)
+    """
+    from logistics.models import RestricaoFamilia
+    
+    # Converte para sets
+    fam1 = set(familias_pedido1)
+    fam2 = set(familias_pedido2)
+    
+    # Busca restrições ativas
+    restricoes = RestricaoFamilia.objects.filter(
+        ativo=True,
+        familia_origem_id__in=fam1,
+        familia_restrita_id__in=fam2
+    ).select_related('familia_origem', 'familia_restrita')
+    
+    if restricoes.exists():
+        restricao = restricoes.first()
+        motivo = restricao.motivo or f"{restricao.familia_origem.nome} incompatível com {restricao.familia_restrita.nome}"
+        return False, motivo
+    
+    # Verifica também no sentido inverso
+    restricoes_inversas = RestricaoFamilia.objects.filter(
+        ativo=True,
+        familia_origem_id__in=fam2,
+        familia_restrita_id__in=fam1
+    ).select_related('familia_origem', 'familia_restrita')
+    
+    if restricoes_inversas.exists():
+        restricao = restricoes_inversas.first()
+        motivo = restricao.motivo or f"{restricao.familia_origem.nome} incompatível com {restricao.familia_restrita.nome}"
+        return False, motivo
+    
+    return True, ""
+
+
+# ======================================================
+# ATUALIZE O FILTRO PedidoFilter PARA USAR RESTRIÇÕES
+# ======================================================
+
+# No método filter_por_raio do PedidoFilter, substitua a seção de verificação:
+
+def filter_por_raio(self, queryset, name, value):
+    """
+    Filtra pedidos dentro de um raio do pedido base
+    """
+    request = self.request
+    pedido_base_id = request.GET.get('pedido_base')
+    raio_km = request.GET.get('raio_km')
+    
+    if not pedido_base_id or not raio_km:
+        return queryset
+    
+    try:
+        pedido_base_id = int(pedido_base_id)
+        raio_km = float(raio_km)
+        
+        pedido_base = Pedido.objects.get(id=pedido_base_id)
+        
+        # Busca as famílias dos produtos do pedido base
+        familias_pedido_base = set(
+            pedido_base.itens.values_list('produto__familia_id', flat=True)
+        )
+        
+        pedidos_com_distancia = {}
+        
+        for pedido in queryset:
+            if pedido.id == pedido_base_id:
+                pedidos_com_distancia[pedido.id] = 0
+                continue
+            
+            # ⭐ VERIFICA COMPATIBILIDADE DE FAMÍLIAS
+            familias_pedido_atual = set(
+                pedido.itens.values_list('produto__familia_id', flat=True)
+            )
+            
+            compativel, motivo = verificar_compatibilidade_familias(
+                familias_pedido_base,
+                familias_pedido_atual
+            )
+            
+            if not compativel:
+                # Pula pedidos incompatíveis
+                continue
+            
+            # Calcula distância
+            distancia = self.calcular_distancia_km(
+                float(pedido_base.latitude),
+                float(pedido_base.longitude),
+                float(pedido.latitude),
+                float(pedido.longitude)
+            )
+            
+            if distancia <= raio_km:
+                pedidos_com_distancia[pedido.id] = round(distancia, 2)
+        
+        # Sempre inclui o pedido base
+        if pedido_base_id not in pedidos_com_distancia:
+            pedidos_com_distancia[pedido_base_id] = 0
+        
+        # Armazena as distâncias no request
+        if not hasattr(request, '_pedidos_distancias'):
+            request._pedidos_distancias = {}
+        request._pedidos_distancias = pedidos_com_distancia
+        
+        return queryset.filter(id__in=pedidos_com_distancia.keys())
+        
+    except (Pedido.DoesNotExist, ValueError):
+        return queryset.none()
