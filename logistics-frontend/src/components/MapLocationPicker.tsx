@@ -13,6 +13,8 @@ type Props = {
   disabled?: boolean;
 };
 
+const roundCoord = (value: number) => Number(value.toFixed(6)); // evita excessos de casas decimais
+
 /**
  * Componente de seleção de localização no mapa
  * Usa Leaflet (OpenStreetMap) - gratuito e sem necessidade de API key
@@ -54,6 +56,16 @@ export function MapLocationPicker({ initialCoords, onLocationSelect, disabled = 
 
       const L = (window as any).L;
 
+      // garante que o ícone do marcador use caminhos absolutos (evita 404)
+      const DefaultIcon = L.icon({
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+      });
+      L.Marker.prototype.options.icon = DefaultIcon;
+
       // Cria o mapa
       const map = L.map(mapRef.current).setView([coords.latitude, coords.longitude], 13);
 
@@ -72,8 +84,8 @@ export function MapLocationPicker({ initialCoords, onLocationSelect, disabled = 
       marker.on("dragend", function (e: any) {
         const position = e.target.getLatLng();
         const newCoords = {
-          latitude: position.lat,
-          longitude: position.lng,
+          latitude: roundCoord(position.lat),
+          longitude: roundCoord(position.lng),
         };
         setCoords(newCoords);
         onLocationSelect(newCoords);
@@ -84,8 +96,8 @@ export function MapLocationPicker({ initialCoords, onLocationSelect, disabled = 
         if (disabled) return;
         
         const newCoords = {
-          latitude: e.latlng.lat,
-          longitude: e.latlng.lng,
+          latitude: roundCoord(e.latlng.lat),
+          longitude: roundCoord(e.latlng.lng),
         };
         
         marker.setLatLng([newCoords.latitude, newCoords.longitude]);
@@ -125,8 +137,8 @@ export function MapLocationPicker({ initialCoords, onLocationSelect, disabled = 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const newCoords = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+          latitude: roundCoord(position.coords.latitude),
+          longitude: roundCoord(position.coords.longitude),
         };
         setCoords(newCoords);
         onLocationSelect(newCoords);
