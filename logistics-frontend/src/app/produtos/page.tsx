@@ -8,15 +8,17 @@ import { useSession, signOut } from "next-auth/react";
 import styles from "../inicio/styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
+const PAGE_SIZE = 20;
 
 const decimalFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-const formatWeight = (value?: number) => {
-  if (typeof value !== "number") return "-";
-  return `${decimalFormatter.format(value)} kg`;
+const formatWeight = (value?: number | string | null) => {
+  const num = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(num)) return "-";
+  return `${decimalFormatter.format(num)} kg`;
 };
 
 const formatVolume = (value?: number | null) => {
@@ -35,6 +37,8 @@ export default function ProdutosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   const displayName = useMemo(
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
@@ -53,7 +57,7 @@ export default function ProdutosPage() {
       setError(null);
       try {
         const [prodResp, famResp] = await Promise.all([
-          fetch("/api/proxy/produtos", { cache: "no-store" }),
+          fetch(`/api/proxy/produtos?limit=${PAGE_SIZE}&offset=${offset}`, { cache: "no-store" }),
           fetch("/api/proxy/familias", { cache: "no-store" }),
         ]);
         if (!prodResp.ok) throw new Error("Não foi possível carregar os produtos.");
@@ -67,6 +71,7 @@ export default function ProdutosPage() {
         const familiesData = famJson.data?.results ?? [];
         setProdutos(productsData);
         setFamilias(familiesData);
+        setTotalCount(prodJson.data?.count ?? 0);
       } catch (err) {
         if (!active) return;
         setProdutos([]);
@@ -80,7 +85,12 @@ export default function ProdutosPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [offset]);
+
+  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil((totalCount || 0) / PAGE_SIZE) || 1);
+  const canPrev = offset > 0;
+  const canNext = offset + produtos.length < totalCount;
 
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
@@ -166,9 +176,9 @@ export default function ProdutosPage() {
                     <td colSpan={7}>Nenhum produto cadastrado.</td>
                   </tr>
                 )}
-                {!loading &&
-                  produtos.map((product) => (
-                    <tr key={product.id}>
+              {!loading &&
+                produtos.map((product) => (
+                  <tr key={product.id}>
                       <td>{product.id}</td>
                       <td>
                         <div className={styles.productName}>
@@ -221,12 +231,39 @@ export default function ProdutosPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+                ))}
+            </tbody>
+          </table>
 
-          <div className={styles.card}>
+          <div
+            className={styles["quick-actions"]}
+            style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+          >
+            <span className={styles.muted}>
+              Página {currentPage} de {totalPages} ({totalCount} registros)
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                disabled={!canPrev || loading}
+                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                disabled={!canNext || loading}
+                onClick={() => setOffset(offset + PAGE_SIZE)}
+              >
+                Próxima
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.card}>
             <div className={styles["card-head"]}>
               <h3>Famílias</h3>
             </div>

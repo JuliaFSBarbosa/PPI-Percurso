@@ -13,6 +13,7 @@ from .serializers import (
     FamiliaSerializer,
     ProdutoSerializer,
     PedidoSerializer,
+    PedidoCreateSerializer,
     RotaSerializer
 )
 from .filters import FamiliaFilter, ProdutoFilter
@@ -76,7 +77,7 @@ class RotaViewSet(viewsets.ReadOnlyModelViewSet):
 # ====================================================
 class PedidoCreateViewSet(viewsets.ModelViewSet):
     queryset = Pedido.objects.all()
-    serializer_class = PedidoSerializer
+    serializer_class = PedidoCreateSerializer
 
 
 class RotaCreateViewSet(viewsets.ModelViewSet):

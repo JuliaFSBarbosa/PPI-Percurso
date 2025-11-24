@@ -17,8 +17,11 @@ const buildHeaders = async (req: Request) => {
 
 export async function GET(req: Request) {
   const hdr = await buildHeaders(req);
-  const { search } = new URL(req.url);
-  const upstream = await fetch(`${readPath}${search}`, {
+  const url = new URL(req.url);
+  if (!url.searchParams.has("limit")) {
+    url.searchParams.set("limit", "20");
+  }
+  const upstream = await fetch(`${readPath}${url.search}`, {
     method: "GET",
     headers: hdr,
     cache: "no-store",

@@ -36,11 +36,19 @@ export const api = async <TypeResponse>({ endpoint, method = "GET", data, withAu
         return request.data
     } catch (error) {
         const e = error as AxiosError<APIError>
+        // loga para facilitar depuração de falhas de login ou rede
+        console.error("API request failed:", {
+            endpoint,
+            method,
+            message: e.message,
+            status: e.response?.status,
+            response: e.response?.data
+        })
 
         return {
             success: false,
-            detail: e.response?.data.detail || "An unexpected error occurred",
-            code: e.response?.data.code || "UNKNOWN_ERROR",
+            detail: e.response?.data?.detail || e.message || "An unexpected error occurred",
+            code: e.response?.data?.code || e.code || "UNKNOWN_ERROR",
             data: null
         }
     }

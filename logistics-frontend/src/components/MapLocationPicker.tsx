@@ -34,21 +34,35 @@ export function MapLocationPicker({ initialCoords, onLocationSelect, disabled = 
       if (typeof window === "undefined") return;
 
       // Carrega CSS do Leaflet
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
+      if (!document.getElementById("leaflet-css")) {
+        const link = document.createElement("link");
+        link.id = "leaflet-css";
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
 
-      // Carrega JS do Leaflet
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.async = true;
-      
-      script.onload = () => {
+      // Carrega JS do Leaflet apenas uma vez
+      if ((window as any).L) {
         initMap();
-      };
+        return;
+      }
 
-      document.body.appendChild(script);
+      if (!document.getElementById("leaflet-js")) {
+        const script = document.createElement("script");
+        script.id = "leaflet-js";
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.defer = true;
+        script.onload = () => initMap();
+        document.body.appendChild(script);
+      } else {
+        const existing = document.getElementById("leaflet-js") as HTMLScriptElement;
+        if (existing && (window as any).L) {
+          initMap();
+        } else {
+          existing?.addEventListener("load", initMap, { once: true });
+        }
+      }
     };
 
     const initMap = () => {

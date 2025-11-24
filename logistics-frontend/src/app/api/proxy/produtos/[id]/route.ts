@@ -14,9 +14,10 @@ const buildHeaders = async (req?: Request) => {
   return hdr;
 };
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const hdr = await buildHeaders();
-  const upstream = await fetch(`${basePath}${params.id}/`, {
+  const upstream = await fetch(`${basePath}${id}/`, {
     method: "GET",
     headers: hdr,
     cache: "no-store",
@@ -28,11 +29,12 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   });
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const hdr = await buildHeaders(req);
   if (!hdr["Content-Type"]) hdr["Content-Type"] = "application/json";
   const body = await req.text();
-  const upstream = await fetch(`${basePath}${params.id}/`, {
+  const upstream = await fetch(`${basePath}${id}/`, {
     method: "PUT",
     headers: hdr,
     body,
@@ -44,9 +46,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   });
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const hdr = await buildHeaders();
-  const upstream = await fetch(`${basePath}${params.id}/`, {
+  const upstream = await fetch(`${basePath}${id}/`, {
     method: "DELETE",
     headers: hdr,
   });
