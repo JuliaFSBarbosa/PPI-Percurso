@@ -1,0 +1,40 @@
+// logistics-frontend/src/app/entregas/novo/page.tsx (ATUALIZADO)
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Inter as InterFont } from "next/font/google";
+import { useSession, signOut } from "next-auth/react";
+import dynamic from "next/dynamic";
+import styles from "../../inicio/styles.module.css";
+
+// Importa o componente do mapa dinamicamente (client-side only)
+const MapLocationPicker = dynamic(
+  () => import("@/components/MapLocationPicker").then((mod) => ({ default: mod.MapLocationPicker })),
+  { ssr: false, loading: () => <div>Carregando mapa...</div> }
+);
+
+const inter = InterFont({ subsets: ["latin"] });
+
+type PedidoItem = { produtoId: string; quantidade: string };
+
+const parseError = (raw: string, fallback: string, status?: number) => {
+  if (!raw) return fallback;
+  const trimmed = raw.trim();
+
+  // tenta JSON v?lido
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed?.detail) return parsed.detail as string;
+    if (Array.isArray(parsed)) return parsed.join(" | ");
+    const first = parsed && Object.keys(parsed)[0];
+    if (first) {
+      const value = parsed[first];
+      if (Array.isArray(value)) return String(value[0]);
+      if (typeof value === "string") return value;
+    }
+  } catch {
+    // tenta tratar string de lista Python: "['err1', 'err2']"
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {

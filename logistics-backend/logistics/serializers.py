@@ -134,7 +134,7 @@ class PedidoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pedido
         fields = [
-            'id', 'usuario', 'usuario_id', 'nf', 'observacao', 'dtpedido',
+            'id', 'usuario', 'usuario_id', 'cliente', 'nf', 'observacao', 'dtpedido',
             'latitude', 'longitude', 'created_at', 'itens', 'peso_total',
             'volume_total', 'total_itens', 'distancia_km'
         ]
@@ -187,7 +187,7 @@ class PedidoSimpleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pedido
         fields = [
-            'id', 'nf', 'dtpedido', 'latitude', 'longitude', 
+            'id', 'nf', 'cliente', 'dtpedido', 'latitude', 'longitude', 
             'usuario_nome', 'observacao'
         ]
 
@@ -308,7 +308,7 @@ class PedidoCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pedido
         fields = [
-            'usuario_id', 'nf', 'observacao', 'dtpedido',
+            'usuario_id', 'cliente', 'nf', 'observacao', 'dtpedido',
             'latitude', 'longitude', 'itens'
         ]
     

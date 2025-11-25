@@ -15,6 +15,7 @@ const RouteMapViewer = dynamic(
 interface Pedido {
   id: number;
   nf: number;
+  cliente?: string;
   latitude: number;
   longitude: number;
   endereco?: string;
@@ -184,6 +185,7 @@ export default function NovaRotaPage() {
                     <th></th>
                     <th>ID</th>
                     <th>NF</th>
+                    <th>Cliente</th>
                     <th>Latitude</th>
                     <th>Longitude</th>
                   </tr>
@@ -196,15 +198,16 @@ export default function NovaRotaPage() {
                           type="checkbox"
                           checked={selecionados.includes(p.id)}
                           onChange={() => toggleSelecionar(p.id)}
-                        />
-                      </td>
-                      <td>{p.id}</td>
-                      <td>{p.nf}</td>
-                      <td>{p.latitude}</td>
-                      <td>{p.longitude}</td>
-                    </tr>
-                  ))}
-                </tbody>
+                      />
+                    </td>
+                    <td>{p.id}</td>
+                    <td>{p.nf}</td>
+                    <td>{p.cliente ?? "-"}</td>
+                    <td>{p.latitude}</td>
+                    <td>{p.longitude}</td>
+                  </tr>
+                ))}
+              </tbody>
               </table>
             </div>
           )}

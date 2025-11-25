@@ -39,6 +39,9 @@ export default function PedidosPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [info, setInfo] = useState<string | null>(null);
+  const [routeResult, setRouteResult] = useState<{ distance?: number } | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
+  const [savingRouteId, setSavingRouteId] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -162,6 +165,70 @@ export default function PedidosPage() {
   const canPrev = offset > 0;
   const canNext = offset + pedidos.length < totalCount;
 
+  const handleOptimize = async () => {
+    setError(null);
+    setInfo(null);
+    setRouteResult(null);
+    setSavingRouteId(null);
+    if (selectedIds.length < 2) {
+      setError("Selecione pelo menos dois pedidos para gerar rota.");
+      return;
+    }
+    setOptimizing(true);
+    try {
+      const deposito = { latitude: -27.5969, longitude: -53.5495 }; // ajuste se necessário
+      const resp = await fetch("/api/proxy/otimizar-rota-genetico", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pedidos_ids: selectedIds, deposito }),
+      });
+      const text = await resp.text();
+      const data = JSON.parse(text);
+      if (!resp.ok || data.error || (data.status && data.status !== "success")) {
+        throw new Error(data.detail || data.error || data.mensagem || "Falha ao otimizar rota.");
+      }
+      const dist = data.resultado?.distancia_total_km;
+      setRouteResult({ distance: dist });
+
+      // usa ordem retornada (índices) para montar ids na ordem
+      const rotaOtimizada: number[] = data.resultado?.rota_otimizada ?? [];
+      const pedidosOrdem =
+        Array.isArray(rotaOtimizada) && rotaOtimizada.length > 0
+          ? rotaOtimizada.map((idx: number) => selectedIds[idx]).filter((v: any) => Number.isInteger(v))
+          : selectedIds;
+
+      const dataRota = new Date().toISOString().slice(0, 10);
+      const selectedPedidos = pedidosWithTotals.filter((p) => pedidosOrdem.includes(p.id));
+      const capacidade = selectedPedidos.reduce(
+        (sum, p) => sum + (Number(p._pesoTotal) || 0),
+        0
+      );
+
+      // salva rota no backend
+      const saveResp = await fetch("/api/proxy/salvar-rota-otimizada", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data_rota: dataRota,
+          capacidade_max: capacidade || 0,
+          pedidos_ordem: pedidosOrdem,
+          distancia_total: dist ?? 0,
+        }),
+      });
+      const saveText = await saveResp.text();
+      const saveData = saveText ? JSON.parse(saveText) : {};
+      if (!saveResp.ok || saveData.error) {
+        throw new Error(saveData.detail || saveData.error || "Falha ao salvar rota.");
+      }
+      setSavingRouteId(saveData.rota_id || null);
+      setInfo(saveData.mensagem || "Rota otimizada e salva com sucesso.");
+    } catch (e: any) {
+      setError(e.message || "Erro ao otimizar rota.");
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
       <aside className={styles.sidebar}>
@@ -186,17 +253,10 @@ export default function PedidosPage() {
               <button
                 type="button"
                 className={`${styles.btn} ${styles.ghost}`}
-                disabled={selectedIds.length === 0}
-                onClick={() => {
-                  setError(null);
-                  setInfo(
-                    selectedIds.length > 1
-                      ? `Geração de rotas simulada para ${selectedIds.length} pedidos.`
-                      : `Geração de rota simulada para o pedido ${selectedIds[0]}.`
-                  );
-                }}
+                disabled={selectedIds.length === 0 || optimizing}
+                onClick={handleOptimize}
               >
-                Gerar rota
+                {optimizing ? "Gerando..." : "Gerar rota"}
               </button>
               <button
                 type="button"
@@ -245,6 +305,7 @@ export default function PedidosPage() {
                 </th>
                 <th>ID</th>
                 <th>NF</th>
+                <th>Cliente</th>
                 <th>Data</th>
                 <th>Itens</th>
                 <th>Peso total</th>
@@ -255,12 +316,12 @@ export default function PedidosPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7}>Carregando pedidos...</td>
+                  <td colSpan={9}>Carregando pedidos...</td>
                 </tr>
               )}
               {!loading && pedidos.length === 0 && (
                 <tr>
-                  <td colSpan={7}>Nenhum pedido cadastrado.</td>
+                  <td colSpan={9}>Nenhum pedido cadastrado.</td>
                 </tr>
               )}
               {!loading &&
@@ -280,6 +341,7 @@ export default function PedidosPage() {
                     </td>
                     <td>{pedido.id}</td>
                     <td>{pedido.nf}</td>
+                    <td>{(pedido as any).cliente ?? "-"}</td>
                     <td>{pedido.dtpedido}</td>
                     <td>{pedido._totalItens ?? 0}</td>
                     <td>{pedido._pesoTotal ?? "-"}</td>
@@ -328,6 +390,20 @@ export default function PedidosPage() {
                 ))}
             </tbody>
           </table>
+
+          {routeResult && (
+            <p className={styles.muted}>
+              Distância otimizada: {routeResult.distance?.toFixed(2) ?? "?"} km
+              {savingRouteId ? ` | Rota salva (#${savingRouteId})` : ""}
+            </p>
+          )}
+          {savingRouteId && (
+            <div className={styles["quick-actions"]}>
+              <Link className={`${styles.btn} ${styles.primary}`} href="/rotas">
+                Visualizar rota
+              </Link>
+            </div>
+          )}
 
           <div
             className={styles["quick-actions"]}

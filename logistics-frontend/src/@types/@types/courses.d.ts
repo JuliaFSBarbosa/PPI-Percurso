@@ -39,6 +39,7 @@ type ProdutoPedido = {
 // PEDIDOS
 type Pedido = {
     id: number;
+    cliente: string;
     usuario: {
         id: number;
         name: string;
@@ -58,6 +59,7 @@ type Pedido = {
 
 type PedidoSimple = {
     id: number;
+    cliente: string;
     nf: number;
     dtpedido: string;
     latitude: number;

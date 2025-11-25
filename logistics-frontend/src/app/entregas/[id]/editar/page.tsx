@@ -54,6 +54,7 @@ export default function EditarPedidoPage() {
 
   const [form, setForm] = useState({
     nf: "",
+    cliente: "",
     dtpedido: "",
     observacao: "",
     latitude: "",
@@ -184,6 +185,10 @@ export default function EditarPedidoPage() {
       setError("Informe a NF.");
       return;
     }
+    if (!form.cliente.trim()) {
+      setError("Informe o cliente.");
+      return;
+    }
 
     if (!form.dtpedido.trim()) {
       setError("Informe a data do pedido.");
@@ -207,6 +212,7 @@ export default function EditarPedidoPage() {
     try {
       const payload = {
         nf: Number(form.nf),
+        cliente: form.cliente.trim(),
         dtpedido: form.dtpedido,
         observacao: form.observacao || null,
         latitude: latNum,
@@ -301,6 +307,15 @@ export default function EditarPedidoPage() {
                   className={styles.input}
                   value={form.nf}
                   onChange={(e) => setForm((prev) => ({ ...prev, nf: e.target.value }))}
+                />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="cliente">Cliente</label>
+                <input
+                  id="cliente"
+                  className={styles.input}
+                  value={form.cliente}
+                  onChange={(e) => setForm((prev) => ({ ...prev, cliente: e.target.value }))}
                 />
               </div>
 
