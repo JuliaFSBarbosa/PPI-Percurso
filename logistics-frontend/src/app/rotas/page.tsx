@@ -92,6 +92,8 @@ export default function RotasPage() {
   const [rotaDetails, setRotaDetails] = useState<Record<number, Rota>>({});
   const [optimizedCoords, setOptimizedCoords] = useState<Record<number, { latitude: number; longitude: number }[]>>({});
   const [modalPedidos, setModalPedidos] = useState<{ rotaId: number; pedidos: RotaPedido[] } | null>(null);
+  const [loadingPedidosId, setLoadingPedidosId] = useState<number | null>(null);
+  const [loadingMapsId, setLoadingMapsId] = useState<number | null>(null); 
 
   const displayName = useMemo(
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
@@ -116,26 +118,6 @@ export default function RotasPage() {
         if (!active) return;
         const results = data.data?.results ?? [];
         setRotas(results);
-
-        const detailList = await Promise.all(
-          results.map(async (r) => {
-            try {
-              const dResp = await fetch(`/api/proxy/rotas/${r.id}`, { cache: "no-store" });
-              const txt = await dResp.text();
-              if (!dResp.ok) return null;
-              const parsed = JSON.parse(txt) as API<APIGetRotaResponse>;
-              if (!parsed.success || !parsed.data) return null;
-              return parsed.data;
-            } catch {
-              return null;
-            }
-          })
-        );
-        const detailMap: Record<number, Rota> = {};
-        detailList.forEach((d) => {
-          if (d?.id) detailMap[d.id] = d;
-        });
-        setRotaDetails(detailMap);
       } catch (err) {
         if (!active) return;
         setRotas([]);
@@ -316,49 +298,46 @@ export default function RotasPage() {
                     <td>{formatWeight(rota.peso_total_pedidos)}</td>
                     <td>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                        {(() => {
-                          const coords =
-                            optimizedCoords[rota.id] ||
-                            ((() => {
-                              const det = rotaDetails[rota.id];
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                          onClick={async () => {
+                            setLoadingMapsId(rota.id);
+                            try {
+                              let det = rotaDetails[rota.id];
+                              if (!det) {
+                                const fetched = await fetchRotaDetail(rota.id);
+                                det = fetched;
+                              }
                               const pedidos = Array.isArray(det?.pedidos) ? [...det.pedidos] : [];
                               pedidos.sort((a, b) => (a.ordem_entrega || 0) - (b.ordem_entrega || 0));
-                              return pedidos
-                                .map((p) => {
-                                  const lat = typeof p.pedido.latitude === "string" ? parseFloat(p.pedido.latitude) : p.pedido.latitude;
-                                  const lng = typeof p.pedido.longitude === "string" ? parseFloat(p.pedido.longitude) : p.pedido.longitude;
-                                  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-                                  return { latitude: lat, longitude: lng };
-                                })
-                                .filter(Boolean) as { latitude: number; longitude: number }[];
-                            })());
-
-                          const link = coords ? buildMapsLink(coords) : null;
-                          const label = "Abrir no Maps";
-                          if (link) {
-                            return (
-                              <a
-                                className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-                                href={link}
-                                target="_blank"
-                                rel="noreferrer"
-                                title="Abrir rota no Google Maps"
-                              >
-                                {label}
-                              </a>
-                            );
-                          }
-                          return (
-                            <button
-                              type="button"
-                              className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-                              disabled
-                              title="Sem coordenadas dos pedidos para abrir no Maps"
-                            >
-                              {label}
-                            </button>
-                          );
-                        })()}
+                              let coords = optimizedCoords[rota.id];
+                              if (!coords) {
+                                const opt = await optimizeCoords(rota.id, det!);
+                                coords = opt || pedidos
+                                  .map((p) => {
+                                    const lat = typeof p.pedido.latitude === "string" ? parseFloat(p.pedido.latitude) : p.pedido.latitude;
+                                    const lng = typeof p.pedido.longitude === "string" ? parseFloat(p.pedido.longitude) : p.pedido.longitude;
+                                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+                                    return { latitude: lat, longitude: lng };
+                                  })
+                                  .filter(Boolean) as { latitude: number; longitude: number }[];
+                                if (coords && coords.length > 0) {
+                                  setOptimizedCoords((prev) => ({ ...prev, [rota.id]: coords! }));
+                                }
+                              }
+                              if (coords && coords.length > 0) {
+                                const link = buildMapsLink(coords);
+                                if (link) window.open(link, "_blank", "noopener,noreferrer");
+                              }
+                            } finally {
+                              setLoadingMapsId(null);
+                            }
+                          }}
+                          disabled={loadingMapsId === rota.id}
+                        >
+                          {loadingMapsId === rota.id ? "Abrindo..." : "Abrir no Maps"}
+                        </button>
                       </div>
                     </td>
                     <td>
@@ -366,13 +345,25 @@ export default function RotasPage() {
                         type="button"
                         className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
                         onClick={() => {
-                          const det = rotaDetails[rota.id];
-                          const pedidos = Array.isArray(det?.pedidos) ? [...det.pedidos] : [];
-                          pedidos.sort((a, b) => (a.ordem_entrega || 0) - (b.ordem_entrega || 0));
-                          setModalPedidos({ rotaId: rota.id, pedidos });
+                          setLoadingPedidosId(rota.id);
+                          const run = async () => {
+                            try {
+                              let det = rotaDetails[rota.id];
+                              if (!det) {
+                                det = await fetchRotaDetail(rota.id);
+                              }
+                              const pedidos = Array.isArray(det?.pedidos) ? [...det.pedidos] : [];
+                              pedidos.sort((a, b) => (a.ordem_entrega || 0) - (b.ordem_entrega || 0));
+                              setModalPedidos({ rotaId: rota.id, pedidos });
+                            } finally {
+                              setLoadingPedidosId(null);
+                            }
+                          };
+                          run();
                         }}
+                        disabled={loadingPedidosId === rota.id}
                       >
-                        Visualizar pedidos
+                        {loadingPedidosId === rota.id ? "Carregando..." : "Visualizar pedidos"}
                       </button>
                     </td>
                   </tr>
