@@ -13,8 +13,14 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
 
   useEffect(() => setMounted(true), []);
 
-  const isDark = (theme === "system" ? resolvedTheme === "dark" : theme === "dark") ?? false;
-  const label = isDark ? "Alternar para tema claro" : "Alternar para tema escuro";
+  const isDark = mounted
+    ? (theme === "system" ? resolvedTheme === "dark" : theme === "dark") ?? false
+    : false;
+  const label = mounted
+    ? isDark
+      ? "Alternar para tema claro"
+      : "Alternar para tema escuro"
+    : "Alternar tema";
 
   return (
     <button
@@ -24,7 +30,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       aria-label={label}
       title={label}
     >
-      {mounted ? (isDark ? "🌙 Escuro" : "☀️ Claro") : "Tema"}
+      {mounted ? (isDark ? "Escuro" : "Claro") : "Tema"}
     </button>
   );
 }

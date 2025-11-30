@@ -16,7 +16,8 @@ from .serializers import (
     PedidoCreateSerializer,
     RotaSerializer
 )
-from .filters import FamiliaFilter, ProdutoFilter
+from .filters import FamiliaFilter, ProdutoFilter, PedidoFilter
+from django_filters.rest_framework import DjangoFilterBackend
 
 # IA (Somente Algoritmo Genético)
 from .ia.genetic_algorithm import otimizar_rota_pedidos, calcular_distancia
@@ -62,6 +63,8 @@ class ProdutoViewSet(viewsets.ModelViewSet):
 class PedidoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Pedido.objects.all()
     serializer_class = PedidoSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = PedidoFilter
 
 
 # ====================================================
