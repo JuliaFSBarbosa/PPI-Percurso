@@ -216,6 +216,56 @@ export default function RotasPage() {
     };
   }, [rotas]);
 
+  const fetchRotaDetail = async (rotaId: number): Promise<Rota | null> => {
+    try {
+      const dResp = await fetch(`/api/proxy/rotas/${rotaId}`, { cache: "no-store" });
+      const txt = await dResp.text();
+      if (!dResp.ok) return null;
+      const parsed = JSON.parse(txt) as API<APIGetRotaResponse>;
+      if (!parsed.success || !parsed.data) return null;
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  };
+
+  const optimizeCoords = async (
+    rotaId: number,
+    rota: Rota
+  ): Promise<{ latitude: number; longitude: number }[] | null> => {
+    const pedidosIds = Array.isArray(rota.pedidos) ? rota.pedidos.map((p) => p.pedido.id) : [];
+    if (pedidosIds.length < 2) return null;
+
+    try {
+      const payload = {
+        pedidos_ids: pedidosIds,
+        deposito: { latitude: -27.3585648, longitude: -53.3996933 },
+      };
+      const resp = await fetch("/api/proxy/otimizar-rota-genetico", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const txt = await resp.text();
+      const data = txt ? JSON.parse(txt) : {};
+      const ordemIdx: number[] = data?.resultado?.rota_otimizada ?? [];
+      if (!Array.isArray(ordemIdx) || ordemIdx.length === 0) return null;
+      const coords = ordemIdx
+        .map((idx) => rota.pedidos?.[idx])
+        .filter(Boolean)
+        .map((p) => {
+          const lat = typeof p!.pedido.latitude === "string" ? parseFloat(p!.pedido.latitude) : p!.pedido.latitude;
+          const lng = typeof p!.pedido.longitude === "string" ? parseFloat(p!.pedido.longitude) : p!.pedido.longitude;
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+          return { latitude: lat, longitude: lng };
+        })
+        .filter(Boolean) as { latitude: number; longitude: number }[];
+      return coords.length > 0 ? coords : null;
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
       <aside className={styles.sidebar}>

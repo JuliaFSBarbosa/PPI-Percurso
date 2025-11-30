@@ -154,7 +154,7 @@ export default function InicioPage() {
               <button
                 type="button"
                 className={`${styles.btn} ${styles.primary}`}
-                onClick={() => router.push("/nova-rota")}
+                onClick={() => router.push("/entregas")}
               >
                 + Nova Rota
               </button>
