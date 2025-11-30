@@ -9,6 +9,8 @@ from .views import (
     PedidoCreateViewSet,
     RotaCreateViewSet,
     GerarPDFRotaView,
+    AtribuirPedidosRotaView,
+    RemoverPedidoRotaView,
 )
 from .otimizacao_views import (
     OtimizarRotaGeneticoView,
@@ -32,8 +34,12 @@ router.register(r'rotas-admin', RotaCreateViewSet, basename='rota-admin')
 
 urlpatterns = [
     path('', include(router.urls)),
+
+    # Atribuir/remover pedidos em rotas
+    path('pedidos/atribuir-rota/', AtribuirPedidosRotaView.as_view(), name='atribuir-pedidos-rota'),
+    path('pedidos/<int:pedido_id>/remover-rota/', RemoverPedidoRotaView.as_view(), name='remover-pedido-rota'),
     
-    # ⭐ Rotas de Otimização com Algoritmo Genético
+    # Rotas de Otimização com Algoritmo Genético
     path('otimizar-rota-genetico/', OtimizarRotaGeneticoView.as_view(), name='otimizar-rota-genetico'),
     path('salvar-rota-otimizada/', SalvarRotaOtimizadaView.as_view(), name='salvar-rota-otimizada'),
     path('comparar-algoritmos/', CompararAlgoritmosView.as_view(), name='comparar-algoritmos'),

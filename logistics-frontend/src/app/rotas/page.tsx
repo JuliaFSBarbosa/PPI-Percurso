@@ -278,7 +278,7 @@ export default function RotasPage() {
           <Link className={styles.active} aria-current="page" href="/rotas">
             Rotas
           </Link>
-          <Link href="/entregas">Pedidos</Link>
+          <Link href="/pedidos">Pedidos</Link>
           <Link href="/produtos">Produtos</Link>
           <Link href="/configuracoes">Usuários</Link>
         </nav>
@@ -347,7 +347,7 @@ export default function RotasPage() {
                 rotas.map((rota) => (
                   <tr key={rota.id}>
                     <td>{rota.id}</td>
-                    <td>{formatDate(rota.data_rota)}</td>
+                    <td>{formatDate(rota.created_at || rota.data_rota)}</td>
                     <td>{rota.total_pedidos ?? rota.pedidos?.length ?? 0}</td>
                     <td>{formatWeight(rota.peso_total_pedidos)}</td>
                     <td>

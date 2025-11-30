@@ -172,7 +172,7 @@ export default function NovoPedidoPage() {
           /* se não for JSON, apenas segue adiante */
         }
       }
-      router.push("/entregas");
+      router.push("/pedidos");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado ao salvar.");
     } finally {
@@ -189,8 +189,8 @@ export default function NovoPedidoPage() {
         <nav>
           <Link href="/inicio">Inicio</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="\nova-rota">Nova Rota</Link>
-          <Link className={styles.active} aria-current="page" href="/entregas">
+          <Link href="/pedidos">Pedidos</Link>
+          <Link className={styles.active} aria-current="page" href="/entregas/novo">
             Pedidos
           </Link>
           <Link href="/produtos">Produtos</Link>

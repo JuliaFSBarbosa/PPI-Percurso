@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { SelectedOrdersMap } from "@/components/pedidos/SelectedOrdersMap";
 import styles from "./styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
@@ -141,7 +142,7 @@ export default function InicioPage() {
             Início
           </Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Pedidos</Link>
+          <Link href="/pedidos">Pedidos</Link>
           <Link href="/produtos">Produtos</Link>
           <Link href="/configuracoes">Usuários</Link>
         </nav>
@@ -155,9 +156,9 @@ export default function InicioPage() {
               <button
                 type="button"
                 className={`${styles.btn} ${styles.primary}`}
-                onClick={() => router.push("/entregas")}
+                onClick={() => router.push("/pedidos")}
               >
-                + Nova Rota
+                Ver pedidos
               </button>
               <button
                 type="button"
@@ -208,7 +209,7 @@ export default function InicioPage() {
           <div className={`${styles.card} ${styles.table}`}>
             <div className={styles["card-head"]}>
               <h3>Pedidos de hoje</h3>
-              <Link className={`${styles.btn} ${styles.ghost} ${styles.sm}`} href="/entregas">
+              <Link className={`${styles.btn} ${styles.ghost} ${styles.sm}`} href="/pedidos">
                 Ver pedidos
               </Link>
             </div>
@@ -251,25 +252,27 @@ export default function InicioPage() {
 
           <div className={`${styles.card} ${styles.map}`}>
             <div className={styles["card-head"]}>
-              <h3>Resumo rápido</h3>
-              <Link className={`${styles.btn} ${styles.ghost} ${styles.sm}`} href="/rotas">
-                Ver rotas
+              <h3>Mapa dos pedidos de hoje</h3>
+              <Link className={`${styles.btn} ${styles.ghost} ${styles.sm}`} href="/pedidos">
+                Ver pedidos
               </Link>
             </div>
-            <div className={styles["map-box"]} style={{ display: "grid", placeItems: "center", color: "var(--muted)" }}>
-              <div style={{ textAlign: "center", lineHeight: 1.4 }}>
-                <p style={{ margin: 0 }}>
-                  Pedidos de hoje: <strong>{kpis.pedidosHoje}</strong>
-                </p>
-                <p style={{ margin: 0 }}>
-                  Pedidos sem rota: <strong>{kpis.disponiveisRota}</strong>
-                </p>
-                <p style={{ margin: 0 }}>
-                  Rotas geradas hoje: <strong>{kpis.rotasGeradasHoje}</strong>
-                </p>
-                <small>(Dados ao vivo das APIs)</small>
-              </div>
-            </div>
+            <SelectedOrdersMap
+              pedidos={pedidosHoje.map((p) => ({
+                id: p.id,
+                cliente: (p as any).cliente,
+                nf: (p as any).nf,
+                cidade:
+                  (p as any).cidade ??
+                  (p as any).endereco_cidade ??
+                  (p as any).endereco ??
+                  (p as any).endereco_resumido,
+                latitude: (p as any).latitude,
+                longitude: (p as any).longitude,
+                peso_total: (p as any)._pesoTotal ?? (p as any).peso_total,
+                volume_total: (p as any)._volumeTotal ?? (p as any).volume_total,
+              }))}
+            />
           </div>
         </section>
       </main>

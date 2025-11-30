@@ -242,7 +242,7 @@ export default function EditarPedidoPage() {
         }
       } catch {}
 
-      router.push("/entregas");
+      router.push("/pedidos");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado ao salvar.");
     } finally {
@@ -262,7 +262,8 @@ export default function EditarPedidoPage() {
         <nav>
           <Link href="/inicio">Inicio</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link className={styles.active} aria-current="page" href="/entregas">
+          <Link href="/pedidos">Pedidos</Link>
+          <Link className={styles.active} aria-current="page" href={`/entregas/${params.id}/editar`}>
             Pedidos
           </Link>
           <Link href="/produtos">Produtos</Link>

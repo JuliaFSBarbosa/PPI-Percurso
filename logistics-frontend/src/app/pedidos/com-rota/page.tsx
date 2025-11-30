@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { redirect } from "next/navigation";
 
-export default function EntregasRedirect() {
+export default function PedidosComRotaRedirect() {
   useEffect(() => {
     redirect("/pedidos");
   }, []);

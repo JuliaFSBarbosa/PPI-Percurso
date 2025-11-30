@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django.db.models import Sum, Max
 from django.http import HttpResponse
 
 from .models import Familia, Produto, Pedido, Rota, RotaPedido
@@ -86,6 +87,54 @@ class PedidoCreateViewSet(viewsets.ModelViewSet):
 class RotaCreateViewSet(viewsets.ModelViewSet):
     queryset = Rota.objects.all()
     serializer_class = RotaSerializer
+
+
+class AtribuirPedidosRotaView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        rota_id = request.data.get('rota_id')
+        pedidos_ids = request.data.get('pedidos_ids', [])
+
+        if not rota_id or not pedidos_ids:
+            return Response({'detail': 'Informe rota_id e pedidos_ids.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        rota = get_object_or_404(Rota, pk=rota_id)
+        pedidos = Pedido.objects.filter(id__in=pedidos_ids)
+        if pedidos.count() != len(pedidos_ids):
+            return Response({'detail': 'Alguns pedidos não foram encontrados.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        ultima_ordem = RotaPedido.objects.filter(rota=rota).aggregate(Max('ordem_entrega')).get('ordem_entrega__max') or 0
+        criados = 0
+        for idx, pedido in enumerate(pedidos, start=1):
+            if RotaPedido.objects.filter(rota=rota, pedido=pedido).exists():
+                continue
+            RotaPedido.objects.create(
+                rota=rota,
+                pedido=pedido,
+                ordem_entrega=ultima_ordem + idx
+            )
+            criados += 1
+
+        return Response(
+            {
+                'success': True,
+                'mensagem': f'{criados} pedidos atribuídos à rota {rota.id}.'
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class RemoverPedidoRotaView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pedido_id):
+        pedido = get_object_or_404(Pedido, pk=pedido_id)
+        removidos, _ = RotaPedido.objects.filter(pedido=pedido).delete()
+        return Response(
+            {'success': True, 'mensagem': f'{removidos} vínculos removidos do pedido {pedido.id}.'},
+            status=status.HTTP_200_OK
+        )
 
 
 # ====================================================

@@ -88,7 +88,7 @@ export default function NovoUsuárioPage() {
         <nav>
           <Link href="/inicio">Inicio</Link>
           <Link href="/rotas">Rotas</Link>
-          <Link href="/entregas">Pedidos</Link>
+          <Link href="/pedidos">Pedidos</Link>
           <Link href="/produtos">Produtos</Link>
           <Link className={styles.active} aria-current="page" href="/configuracoes">
             Usuários
