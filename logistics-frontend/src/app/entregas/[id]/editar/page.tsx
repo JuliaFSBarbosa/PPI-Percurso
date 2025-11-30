@@ -138,6 +138,7 @@ export default function EditarPedidoPage() {
 
         setForm({
           nf: data.nf ? String(data.nf) : "",
+          cliente: data.cliente ? String(data.cliente) : "",
           dtpedido: data.dtpedido ? data.dtpedido.slice(0, 10) : "",
           observacao: data.observacao ?? "",
           latitude: data.latitude !== null ? String(data.latitude) : "",
@@ -182,16 +183,16 @@ export default function EditarPedidoPage() {
       return Number.isNaN(n) ? null : n;
     };
 
-    if (!form.nf.trim() || Number.isNaN(Number(form.nf))) {
+    if (!form.nf?.trim() || Number.isNaN(Number(form.nf))) {
       setError("Informe a NF.");
       return;
     }
-    if (!form.cliente.trim()) {
+    if (!form.cliente?.trim()) {
       setError("Informe o cliente.");
       return;
     }
 
-    if (!form.dtpedido.trim()) {
+    if (!form.dtpedido?.trim()) {
       setError("Informe a data do pedido.");
       return;
     }

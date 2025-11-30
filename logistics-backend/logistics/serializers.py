@@ -121,59 +121,55 @@ class PedidoSerializer(serializers.ModelSerializer):
     """
     usuario = UsuarioSimpleSerializer(read_only=True)
     usuario_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
-    
-    # many=True: indica que são múltiplos itens relacionados
+
     itens = ProdutoPedidoSerializer(many=True, read_only=True)
-    
-    # Campos calculados para estatísticas do pedido
+
     peso_total = serializers.SerializerMethodField()
     volume_total = serializers.SerializerMethodField()
     total_itens = serializers.SerializerMethodField()
     distancia_km = serializers.SerializerMethodField()
-    
+    rotas = serializers.SerializerMethodField()
+
     class Meta:
         model = Pedido
         fields = [
             'id', 'usuario', 'usuario_id', 'cliente', 'nf', 'observacao', 'dtpedido',
             'latitude', 'longitude', 'created_at', 'itens', 'peso_total',
-            'volume_total', 'total_itens', 'distancia_km'
+            'volume_total', 'total_itens', 'distancia_km', 'rotas'
         ]
-    
+
     def get_peso_total(self, obj):
-        """
-        Calcula peso total de todos os itens do pedido
-        - Loop através de todos os itens
-        - Soma peso unitário × quantidade de cada item
-        """
         total = 0
         for item in obj.itens.all():
             total += item.produto.peso * item.quantidade
         return total
-    
+
     def get_volume_total(self, obj):
-        """
-        Calcula volume total de todos os itens do pedido
-        - Considera apenas produtos que têm volume definido
-        - Alguns produtos podem não ter volume (ex: serviços)
-        """
         total = 0
         for item in obj.itens.all():
-            if item.produto.volume:  # Verifica se o produto tem volume
+            if item.produto.volume:
                 total += item.produto.volume * item.quantidade
         return total
-    
+
     def get_total_itens(self, obj):
-        """
-        Conta total de itens no pedido (soma das quantidades)
-        - aggregate(): função do Django para cálculos no banco
-        - Sum('quantidade'): soma todos os valores da coluna quantidade
-        """
         return obj.itens.aggregate(total=Sum('quantidade'))['total'] or 0
 
-
     def get_distancia_km(self, obj):
-    # Calcular distância do pedido base se estiver no contexto
-     return self.context.get('distancia_km', 0)
+        return self.context.get('distancia_km', 0)
+
+    def get_rotas(self, obj):
+        try:
+            rels = obj.rotas.all()
+        except Exception:
+            return []
+        return [
+            {
+                "id": rp.rota.id,
+                "status": rp.rota.status,
+                "data_rota": rp.rota.data_rota
+            }
+            for rp in rels
+        ]
 
 
 class PedidoSimpleSerializer(serializers.ModelSerializer):

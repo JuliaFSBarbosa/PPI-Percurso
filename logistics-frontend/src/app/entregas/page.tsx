@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
 import styles from "../inicio/styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
@@ -29,6 +30,21 @@ const parseError = (raw: string, fallback: string, status?: number) => {
     }
   }
   return raw || fallback;
+};
+
+const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+const formatDateBR = (value: any) => {
+  if (!value) return "-";
+  const asString = String(value).trim();
+  const iso = asString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const br = asString.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (br) return `${br[1]}/${br[2]}/${br[3]}`;
+  const d = new Date(asString);
+  if (!Number.isNaN(d.getTime())) {
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  }
+  return asString;
 };
 
 export default function PedidosPage() {
@@ -248,6 +264,7 @@ export default function PedidosPage() {
       </aside>
 
       <main className={styles.content}>
+        {loading && <LoadingOverlay message="Carregando pedidos..." />}
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
             <div className={styles.pageActions}>
@@ -312,6 +329,7 @@ export default function PedidosPage() {
                 <th>Itens</th>
                 <th>Peso total</th>
                 <th>Volume total</th>
+                <th>Rota</th>
                 <th />
               </tr>
             </thead>
@@ -344,10 +362,17 @@ export default function PedidosPage() {
                     <td>{pedido.id}</td>
                     <td>{pedido.nf}</td>
                     <td>{(pedido as any).cliente ?? "-"}</td>
-                    <td>{pedido.dtpedido}</td>
+                    <td>{formatDateBR(pedido.dtpedido)}</td>
                     <td>{pedido._totalItens ?? 0}</td>
                     <td>{pedido._pesoTotal ?? "-"}</td>
                     <td>{pedido._volumeTotal ?? "-"}</td>
+                    <td>
+                      {Array.isArray((pedido as any).rotas) && (pedido as any).rotas.length > 0 ? (
+                        <span className={`${styles.badge} ${styles.ok}`}>Com rota</span>
+                      ) : (
+                        <span className={`${styles.badge} ${styles.warn}`}>Sem rota</span>
+                      )}
+                    </td>
                     <td>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <button

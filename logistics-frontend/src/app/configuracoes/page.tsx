@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../inicio/styles.module.css";
 
@@ -105,6 +106,7 @@ export default function UsuariosPage() {
       </aside>
 
       <main className={styles.content}>
+        {loading && <LoadingOverlay message="Carregando usuários..." />}
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
             <div className={styles.pageActions}>

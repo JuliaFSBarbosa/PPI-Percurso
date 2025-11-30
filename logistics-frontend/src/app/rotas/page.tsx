@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
 import styles from "../inicio/styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
@@ -283,6 +284,7 @@ export default function RotasPage() {
         </nav>
       </aside>
       <main className={styles.content}>
+        {loading && <LoadingOverlay message="Carregando rotas..." />}
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
             <div className={styles.pageActions}>

@@ -6,6 +6,7 @@ import { Inter as InterFont } from "next/font/google";
 import { useEffect, useMemo, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
 import styles from "./styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
@@ -84,12 +85,8 @@ export default function InicioPage() {
       setErro(null);
       try {
         // Puxamos um lote generoso e filtramos no client para garantir coerência
-        const [pedidosResp, disponiveisResp, rotasHojeResp] = await Promise.all([
+        const [pedidosResp, rotasHojeResp] = await Promise.all([
           fetchJson<APIGetPedidosResponse>("/api/proxy/pedidos?limit=500", "Falha ao carregar pedidos."),
-          fetchJson<APIGetPedidosResponse>(
-            "/api/proxy/pedidos?disponivel_para_rota=true&limit=500",
-            "Falha ao carregar pedidos disponíveis."
-          ),
           fetchJson<APIGetRotasResponse>(
             `/api/proxy/rotas?data_inicio=${hoje}&data_fim=${hoje}&limit=500`,
             "Falha ao carregar rotas do dia."
@@ -100,7 +97,10 @@ export default function InicioPage() {
         const pedidosHojeLista = pedidosLista.filter((p: any) => normalizeDateToISO(p.dtpedido) === hoje);
 
         // Conteúdo real
-        const pedidosDisponiveis = disponiveisResp?.results ?? [];
+        const pedidosDisponiveis = pedidosLista.filter((p: any) => {
+          const rotas = Array.isArray((p as any).rotas) ? (p as any).rotas : [];
+          return rotas.length === 0;
+        });
         const rotasHoje = rotasHojeResp?.results ?? [];
 
         setPedidosHoje(pedidosHojeLista as Pedido[]);
@@ -148,6 +148,7 @@ export default function InicioPage() {
       </aside>
 
       <main className={styles.content}>
+        {loading && <LoadingOverlay message="Carregando dados do dia..." />}
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
             <div className={styles.pageActions}>
@@ -223,6 +224,7 @@ export default function InicioPage() {
                     <th>Cliente</th>
                     <th>Data</th>
                     <th>Itens</th>
+                    <th>Rota</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -233,6 +235,13 @@ export default function InicioPage() {
                       <td>{(p as any).cliente ?? "-"}</td>
                       <td>{formatDateBR(p.dtpedido)}</td>
                       <td>{totalItens(p)}</td>
+                      <td>
+                        {Array.isArray((p as any).rotas) && (p as any).rotas.length > 0 ? (
+                          <span className={`${styles.badge} ${styles.ok}`}>Com rota</span>
+                        ) : (
+                          <span className={`${styles.badge} ${styles.warn}`}>Sem rota</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
