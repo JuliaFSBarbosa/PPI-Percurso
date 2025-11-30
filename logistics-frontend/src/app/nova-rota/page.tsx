@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../inicio/styles.module.css";
 
 // Carregar visualizador de mapa dinamicamente
@@ -163,6 +164,7 @@ export default function NovaRotaPage() {
               <strong>{displayName}</strong>
               <small>Administrador</small>
             </div>
+            <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
             <button
               className={`${styles.btn} ${styles.ghost}`}
               onClick={() => signOut({ callbackUrl: "/" })}

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import dynamic from "next/dynamic";
 import styles from "../../inicio/styles.module.css";
 
@@ -203,15 +204,16 @@ export default function NovoPedidoPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-              <div className={styles.avatar}>{avatarLetter}</div>
-              <div className={styles.info}>
-                <strong>{displayName}</strong>
-                <small>Administrador</small>
-              </div>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-                onClick={() => signOut({ callbackUrl: "/" })}
+            <div className={styles.avatar}>{avatarLetter}</div>
+            <div className={styles.info}>
+              <strong>{displayName}</strong>
+              <small>Administrador</small>
+            </div>
+            <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+              onClick={() => signOut({ callbackUrl: "/" })}
               >
                 Sair
               </button>

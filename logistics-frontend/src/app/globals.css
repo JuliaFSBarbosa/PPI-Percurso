@@ -96,24 +96,74 @@
 
 @layer base {
   :root {
-    /* Login page */
-    --green:#072b21;
-    --green-dark:#06402C;
-    --text:#ffffff;
-    --field:#e3e3e3;
+    /* Login / brand */
+    --green: #e7f0ea; /* fundo claro do login */
+    --green-dark: #b6d1c2; /* faixa escura do gradiente do login */
+    --field: #e3e3e3; /* cor dos campos de input no login */
 
-    /* Dashboard (inicio) */
-    --bg:#0e1a16;
-    --panel:#0f2b21;
-    --panel-2:#113629;
-    --muted:#b6c9c2;
-    --brand:#0f5132;
-    --brand-2:#145a43;
-    --accent:#f1c40f;
-    --ok:#1abc9c;
-    --late:#e67e22;
-    --done:#2ecc71;
-    --warn:#e74c3c;
-    --shadow:0 10px 25px rgba(0,0,0,.35);
+    /* Tema claro (default) */
+    --text: #0f172a; /* texto principal */
+    --bg: #d4ece4; /* fundo base das páginas */
+    --panel: #ffffff; /* cartões e painéis */
+    --panel-2: #eef3f0; /* variação clara para botões/ghost */
+    --muted: #475569; /* textos secundários */
+    --brand: #0f5132; /* cor de marca principal */
+    --brand-2: #1a7f55; /* variação da marca (avatar) */
+    --accent: #f1c40f; /* acentos/destaques */
+    --ok: #15803d; /* status ok/sucesso */
+    --late: #d97706; /* status atrasado/alerta */
+    --done: #16a34a; /* status concluído */
+    --warn: #dc2626; /* status erro/alerta vermelho */
+    --shadow: 0 10px 25px rgba(0, 0, 0, .12); /* sombra padrão */
+    --nav-active: #dfe9e4; /* item ativo do menu lateral */
+    --nav-active-border: rgba(15, 81, 50, .25); /* borda do item ativo */
+    --nav-hover: rgba(15, 81, 50, .08); /* hover do menu lateral */
+    --divider: rgba(0, 0, 0, .08); /* divisórias/header line */
+    --card-border: rgba(0, 0, 0, .08); /* bordas de cartões e inputs */
+    --table-divider: rgba(0, 0, 0, .1); /* linhas de tabela */
+    --sidebar-border: rgba(0, 0, 0, .08); /* borda lateral */
+    --bg-gradient-start: #aff0cf; /* início do gradiente de fundo */
+    --bg-gradient-end: #024725; /* fim do gradiente de fundo */
+    --sidebar-bg-start: #a1f3ce; /* início do gradiente da sidebar */
+    --sidebar-bg-end: #84b99f; /* fim do gradiente da sidebar */
+    --primary-start: #0f5132; /* gradiente do botão primário (início) */
+    --primary-end: #1a7f55; /* gradiente do botão primário (fim) */
+    --map-bg-start: #ebf3ef; /* gradiente claro do mapa (início) */
+    --map-bg-end: #dfe9e4; /* gradiente claro do mapa (fim) */
+    --warn-outline: rgba(241, 196, 15, .4); /* contorno de cartões de alerta */
+  }
+
+  .dark {
+    --green: #072b21; /* fundo escuro do login */
+    --green-dark: #06402C; /* faixa escura do login */
+    --text: #ffffff; /* texto principal no escuro */
+    --bg: #0e1a16; /* fundo base */
+    --panel: #0B3D2E; /* cartões e painéis */
+    --panel-2: #113629; /* variação de painel/botão ghost */
+    --muted: #b6c9c2; /* textos secundários */
+    --brand: #0f5132; /* marca principal */
+    --brand-2: #145a43; /* variação da marca */
+    --accent: #f1c40f; /* acentos/destaques */
+    --ok: #1abc9c; /* status ok/sucesso */
+    --late: #e67e22; /* status atrasado/alerta */
+    --done: #2ecc71; /* status concluído */
+    --warn: #e74c3c; /* status erro/alerta vermelho */
+    --shadow: 0 10px 25px rgba(0, 0, 0, .35); /* sombra forte */
+    --nav-active: #0E4A38; /* item ativo do menu lateral */
+    --nav-active-border: #0b5238; /* borda do item ativo */
+    --nav-hover: rgba(255, 255, 255, .06); /* hover do menu lateral */
+    --divider: rgba(255, 255, 255, .08); /* divisórias/header line */
+    --card-border: rgba(255, 255, 255, .08); /* bordas de cartões e inputs */
+    --table-divider: rgba(255, 255, 255, .06); /* linhas de tabela */
+    --sidebar-border: rgba(255, 255, 255, .08); /* borda lateral */
+    --bg-gradient-start: #06211A; /* início do gradiente de fundo */
+    --bg-gradient-end: #0e1a16; /* fim do gradiente de fundo */
+    --sidebar-bg-start: #041914; /* início do gradiente da sidebar */
+    --sidebar-bg-end: #000e09; /* fim do gradiente da sidebar */
+    --primary-start: #0f3a2b; /* gradiente do botão primário (início) */
+    --primary-end: #145a43; /* gradiente do botão primário (fim) */
+    --map-bg-start: #0b241c; /* gradiente do mapa (início) */
+    --map-bg-end: #0e2f24; /* gradiente do mapa (fim) */
+    --warn-outline: rgba(241, 196, 15, .4); /* contorno de cartões de alerta */
   }
 }

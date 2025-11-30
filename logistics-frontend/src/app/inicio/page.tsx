@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useMemo } from "react";
 import { useSession, signOut } from "next-auth/react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "./styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
@@ -62,16 +63,17 @@ export default function InícioPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-              <div className={styles.avatar}>{avatarLetter}</div>
-              <div className={styles.info}>
-                <strong>{displayName}</strong>
-                <small>Administrador</small>
-              </div>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-                onClick={() => signOut({ callbackUrl: "/" })}
-                aria-label="Sair"
+            <div className={styles.avatar}>{avatarLetter}</div>
+            <div className={styles.info}>
+              <strong>{displayName}</strong>
+              <small>Administrador</small>
+            </div>
+            <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+              onClick={() => signOut({ callbackUrl: "/" })}
+              aria-label="Sair"
                 title="Sair"
               >
                 Sair
