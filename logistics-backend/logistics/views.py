@@ -15,7 +15,8 @@ from .serializers import (
     ProdutoSerializer,
     PedidoSerializer,
     PedidoCreateSerializer,
-    RotaSerializer
+    RotaSerializer,
+    RotaCreateSerializer
 )
 from .filters import FamiliaFilter, ProdutoFilter, PedidoFilter
 from django_filters.rest_framework import DjangoFilterBackend
@@ -86,7 +87,7 @@ class PedidoCreateViewSet(viewsets.ModelViewSet):
 
 class RotaCreateViewSet(viewsets.ModelViewSet):
     queryset = Rota.objects.all()
-    serializer_class = RotaSerializer
+    serializer_class = RotaCreateSerializer
 
 
 class AtribuirPedidosRotaView(APIView):
