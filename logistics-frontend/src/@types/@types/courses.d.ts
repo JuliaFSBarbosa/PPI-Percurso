@@ -40,6 +40,7 @@ type ProdutoPedido = {
 type Pedido = {
     id: number;
     cliente: string;
+    cidade?: string;
     usuario: {
         id: number;
         name: string;

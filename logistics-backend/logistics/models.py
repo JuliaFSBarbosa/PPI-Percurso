@@ -46,6 +46,7 @@ class Pedido(models.Model):
         blank=True  # Caso nem todos os pedidos precisem ter usuário associado
     )
     cliente = models.CharField(max_length=100, default="")
+    cidade = models.CharField(max_length=100, default="", blank=True)
     nf = models.IntegerField(verbose_name='Nota Fiscal')
     observacao = models.CharField(max_length=100, blank=True, null=True)
     dtpedido = models.DateField(verbose_name='Data do Pedido')

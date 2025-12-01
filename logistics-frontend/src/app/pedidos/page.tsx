@@ -49,6 +49,8 @@ const formatDateBR = (value: any) => {
   return asString;
 };
 
+const normalizeId = (value: number | string | null | undefined) => Number(value ?? 0);
+
 type PedidoEnriquecido = Pedido & {
   _totalItens?: number;
   _pesoTotal?: number;
@@ -131,7 +133,15 @@ export default function PedidosPage() {
         });
       }
 
-      setPedidos(lista);
+      const listaNormalizada = lista.map(
+        (p) =>
+          ({
+            ...p,
+            id: normalizeId((p as any).id),
+          } as Pedido)
+      );
+
+      setPedidos(listaNormalizada);
     } catch (err) {
       setPedidos([]);
       setError(err instanceof Error ? err.message : "Falha ao carregar pedidos.");
@@ -178,12 +188,7 @@ export default function PedidosPage() {
               0
             );
 
-      const cidade =
-        (pedido as any).cidade ||
-        (pedido as any).endereco_cidade ||
-        (pedido as any).endereco ||
-        (pedido as any).endereco_resumido ||
-        "-";
+      const cidade = (pedido as any).cidade || "-";
 
       const rota =
         typeof (pedido as any).rota !== "undefined"
@@ -249,6 +254,9 @@ export default function PedidosPage() {
     setInfo(null);
     setDeletingId(pedidoId);
     try {
+      const targetId = normalizeId(pedidoId);
+      const newTotal = Math.max(0, totalCount - 1);
+      const adjustedOffset = offset >= newTotal && offset > 0 ? Math.max(0, offset - PAGE_SIZE) : offset;
       const resp = await fetch(`/api/proxy/pedidos/${pedidoId}`, {
         method: "DELETE",
         credentials: "include",
@@ -257,8 +265,14 @@ export default function PedidosPage() {
       if (!resp.ok) {
         throw new Error(parseError(text, "Falha ao excluir pedido.", resp.status));
       }
-      setPedidos((prev) => prev.filter((p) => p.id !== pedidoId));
-      setSelectedIds((prev) => prev.filter((id) => id !== pedidoId));
+      setPedidos((prev) => prev.filter((p) => normalizeId((p as any).id) !== targetId));
+      setSelectedIds((prev) => prev.filter((id) => normalizeId(id) !== targetId));
+      setTotalCount(newTotal);
+      setInfo("Pedido excluído com sucesso.");
+      await loadPedidos(adjustedOffset);
+      if (adjustedOffset !== offset) {
+        setOffset(adjustedOffset);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao excluir pedido.");
     } finally {

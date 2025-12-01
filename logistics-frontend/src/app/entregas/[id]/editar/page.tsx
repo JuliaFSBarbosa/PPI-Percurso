@@ -56,6 +56,7 @@ export default function EditarPedidoPage() {
   const [form, setForm] = useState({
     nf: "",
     cliente: "",
+    cidade: "",
     dtpedido: "",
     observacao: "",
     latitude: "",
@@ -139,6 +140,12 @@ export default function EditarPedidoPage() {
         setForm({
           nf: data.nf ? String(data.nf) : "",
           cliente: data.cliente ? String(data.cliente) : "",
+          cidade:
+            (data as any).cidade ||
+            (data as any).endereco_cidade ||
+            (data as any).endereco ||
+            (data as any).endereco_resumido ||
+            "",
           dtpedido: data.dtpedido ? data.dtpedido.slice(0, 10) : "",
           observacao: data.observacao ?? "",
           latitude: data.latitude !== null ? String(data.latitude) : "",
@@ -192,6 +199,11 @@ export default function EditarPedidoPage() {
       return;
     }
 
+    if (!form.cidade?.trim()) {
+      setError("Informe a cidade.");
+      return;
+    }
+
     if (!form.dtpedido?.trim()) {
       setError("Informe a data do pedido.");
       return;
@@ -215,6 +227,7 @@ export default function EditarPedidoPage() {
       const payload = {
         nf: Number(form.nf),
         cliente: form.cliente.trim(),
+        cidade: form.cidade.trim(),
         dtpedido: form.dtpedido,
         observacao: form.observacao || null,
         latitude: latNum,
@@ -311,15 +324,25 @@ export default function EditarPedidoPage() {
                   className={styles.input}
                   value={form.nf}
                   onChange={(e) => setForm((prev) => ({ ...prev, nf: e.target.value }))}
-                />
-              </div>
+              />
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="cliente">Cliente</label>
+              <input
+                id="cliente"
+                className={styles.input}
+                value={form.cliente}
+                onChange={(e) => setForm((prev) => ({ ...prev, cliente: e.target.value }))}
+              />
+            </div>
+
               <div className={styles.field}>
-                <label htmlFor="cliente">Cliente</label>
+                <label htmlFor="cidade">Cidade</label>
                 <input
-                  id="cliente"
+                  id="cidade"
                   className={styles.input}
-                  value={form.cliente}
-                  onChange={(e) => setForm((prev) => ({ ...prev, cliente: e.target.value }))}
+                  value={form.cidade}
+                  onChange={(e) => setForm((prev) => ({ ...prev, cidade: e.target.value }))}
                 />
               </div>
 

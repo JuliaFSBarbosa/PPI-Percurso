@@ -81,12 +81,7 @@ export function OrdersTable({
           )}
           {!loading &&
             pedidos.map((pedido) => {
-              const cidade =
-                (pedido as any).cidade ||
-                (pedido as any).endereco_cidade ||
-                (pedido as any).endereco ||
-                (pedido as any).endereco_resumido ||
-                "";
+              const cidade = (pedido as any).cidade || "";
               return (
               <tr key={pedido.id}>
                 <td>
