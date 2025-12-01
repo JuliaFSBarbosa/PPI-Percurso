@@ -212,8 +212,8 @@ export default function PedidosPage() {
     setError(null);
     setInfo(null);
     setSavingRouteId(null);
-    if (selectedIds.length === 0) {
-      setError("Selecione ao menos um pedido para gerar rota.");
+    if (selectedIds.length < 2) {
+      setError("Selecione pelo menos 2 pedidos para otimizar a rota.");
       return;
     }
     setOptimizing(true);
@@ -223,21 +223,85 @@ export default function PedidosPage() {
         .filter((p) => selectedIds.includes(p.id))
         .reduce((sum, p) => sum + (Number(p._pesoTotal) || 0), 0);
 
-      const resp = await fetch("/api/proxy/rotas", {
+      const selectedOrders = selectedIds
+        .map((id) => pedidosWithTotals.find((p) => p.id === id))
+        .filter(Boolean) as PedidoEnriquecido[];
+
+      const hasInvalidCoords = selectedOrders.some((p) => {
+        const lat = Number((p as any).latitude);
+        const lng = Number((p as any).longitude);
+        return !Number.isFinite(lat) || !Number.isFinite(lng);
+      });
+
+      if (hasInvalidCoords) {
+        throw new Error("Algum pedido selecionado está sem latitude/longitude. Edite e preencha para otimizar.");
+      }
+
+      const deposito = { latitude: -27.3585648, longitude: -53.3996933 };
+
+      const otimizaResp = await fetch("/api/proxy/otimizar-rota-genetico", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pedidos_ids: selectedOrders.map((p) => p.id),
+          deposito,
+        }),
+      });
+      const otimizaText = await otimizaResp.text();
+      if (!otimizaResp.ok) throw new Error(parseError(otimizaText, "Falha ao otimizar rota.", otimizaResp.status));
+      const otimizaData = otimizaText ? JSON.parse(otimizaText) : {};
+      const resultado =
+        otimizaData?.resultado ||
+        otimizaData?.data?.resultado ||
+        otimizaData?.data ||
+        otimizaData;
+      const resultadoBruto = resultado;
+      let pedidosOrdenados: number[] = resultado?.pedidos_ordem ?? [];
+      const distanciaOtimizada = resultado?.distancia_total_km;
+
+      if ((!pedidosOrdenados || pedidosOrdenados.length === 0) && Array.isArray(resultado?.rota_otimizada)) {
+        // rota_otimizada traz índices; converte para IDs na mesma ordem enviada
+        pedidosOrdenados = resultado.rota_otimizada
+          .map((idx: number) => selectedOrders[idx]?.id)
+          .filter((id: number | undefined): id is number => typeof id === "number");
+      }
+
+      pedidosOrdenados = Array.isArray(pedidosOrdenados)
+        ? pedidosOrdenados
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id))
+        : [];
+
+      if (!Array.isArray(pedidosOrdenados) || pedidosOrdenados.length === 0) {
+        throw new Error(
+          `Otimização não retornou uma ordem de pedidos. Resultado bruto: ${JSON.stringify(resultadoBruto) || "vazio"}`
+        );
+      }
+
+      const resp = await fetch("/api/proxy/salvar-rota-otimizada", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data_rota: hoje,
           capacidade_max: capacidade || 0,
-          pedidos_ids: selectedIds,
+          pedidos_ordem: pedidosOrdenados,
+          distancia_total: distanciaOtimizada || null,
         }),
       });
       const text = await resp.text();
       if (!resp.ok) throw new Error(parseError(text, "Falha ao criar rota.", resp.status));
       const data = text ? JSON.parse(text) : {};
-      if (data.success === false) throw new Error(data.detail || "Erro ao criar rota.");
-      setSavingRouteId(data.id || data.rota_id || null);
-      setInfo("Rota criada com sucesso.");
+      if (data.success === false || data.status === "error") throw new Error(data.detail || data.error || "Erro ao criar rota.");
+      setSavingRouteId(data.id || data.rota_id || data?.rota_id || null);
+      const ordemHuman = pedidosOrdenados.join(" → ");
+      const distanciaMsg =
+        typeof distanciaOtimizada === "number" ? ` | Distância: ${distanciaOtimizada} km` : "";
+      const algoritmo = resultado?.algoritmo || "genetico";
+      setInfo(
+        ordemHuman
+          ? `Rota otimizada criada (${algoritmo}). Ordem: ${ordemHuman}${distanciaMsg}`
+          : `Rota otimizada criada (${algoritmo}).${distanciaMsg}`
+      );
       setSelectedIds([]);
       await loadPedidos(0);
       setOffset(0);

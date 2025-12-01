@@ -92,7 +92,6 @@ export default function RotasPage() {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [rotaDetails, setRotaDetails] = useState<Record<number, Rota>>({});
-  const [optimizedCoords, setOptimizedCoords] = useState<Record<number, { latitude: number; longitude: number }[]>>({});
   const [modalPedidos, setModalPedidos] = useState<{ rotaId: number; pedidos: RotaPedido[] } | null>(null);
   const [loadingPedidosId, setLoadingPedidosId] = useState<number | null>(null);
   const [loadingMapsId, setLoadingMapsId] = useState<number | null>(null); 
@@ -134,89 +133,6 @@ export default function RotasPage() {
     };
   }, [reloadKey]);
 
-  // carrega detalhes e otimiza ordem
-  useEffect(() => {
-    let active = true;
-    const run = async () => {
-      if (rotas.length === 0) {
-        setRotaDetails({});
-        setOptimizedCoords({});
-        return;
-      }
-      try {
-        const detailList = await Promise.all(
-          rotas.map(async (r) => {
-            try {
-              const dResp = await fetch(`/api/proxy/rotas/${r.id}`, { cache: "no-store" });
-              const txt = await dResp.text();
-              if (!dResp.ok) return null;
-              const parsed = JSON.parse(txt) as API<APIGetRotaResponse>;
-              if (!parsed.success || !parsed.data) return null;
-              return parsed.data;
-            } catch {
-              return null;
-            }
-          })
-        );
-        const detailMap: Record<number, Rota> = {};
-        detailList.forEach((d) => {
-          if (d?.id) detailMap[d.id] = d;
-        });
-        if (!active) return;
-        setRotaDetails(detailMap);
-
-        // otimiza ordem chamando backend de otimização
-        const optEntries = await Promise.all(
-          Object.values(detailMap).map(async (d) => {
-            const pedidosIds = Array.isArray(d.pedidos) ? d.pedidos.map((p) => p.pedido.id) : [];
-            if (pedidosIds.length < 2) return { id: d.id, coords: null as any };
-            try {
-              const payload = {
-                pedidos_ids: pedidosIds,
-                deposito: { latitude: -27.3585648, longitude: -53.3996933 },
-              };
-              const resp = await fetch("/api/proxy/otimizar-rota-genetico", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-              });
-              const txt = await resp.text();
-              const data = JSON.parse(txt);
-              const ordemIdx: number[] = data?.resultado?.rota_otimizada ?? [];
-              const pedidosOrdenados =
-                ordemIdx.length > 0
-                  ? ordemIdx
-                      .map((idx) => d.pedidos?.[idx])
-                      .filter(Boolean)
-                      .map((p) => {
-                        const lat = typeof p!.pedido.latitude === "string" ? parseFloat(p!.pedido.latitude) : p!.pedido.latitude;
-                        const lng = typeof p!.pedido.longitude === "string" ? parseFloat(p!.pedido.longitude) : p!.pedido.longitude;
-                        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-                        return { latitude: lat, longitude: lng };
-                      })
-                      .filter(Boolean)
-                  : null;
-              return { id: d.id, coords: pedidosOrdenados };
-            } catch {
-              return { id: d.id, coords: null as any };
-            }
-          })
-        );
-        const optMap: Record<number, { latitude: number; longitude: number }[]> = {};
-        optEntries.forEach((e) => {
-          if (e.id && e.coords && e.coords.length > 0) optMap[e.id] = e.coords;
-        });
-        if (active) setOptimizedCoords(optMap);
-      } catch {
-        /* ignore */
-      }
-    };
-    run();
-    return () => {
-      active = false;
-    };
-  }, [rotas]);
-
   const fetchRotaDetail = async (rotaId: number): Promise<Rota | null> => {
     try {
       const dResp = await fetch(`/api/proxy/rotas/${rotaId}`, { cache: "no-store" });
@@ -224,44 +140,8 @@ export default function RotasPage() {
       if (!dResp.ok) return null;
       const parsed = JSON.parse(txt) as API<APIGetRotaResponse>;
       if (!parsed.success || !parsed.data) return null;
+      setRotaDetails((prev) => ({ ...prev, [rotaId]: parsed.data }));
       return parsed.data;
-    } catch {
-      return null;
-    }
-  };
-
-  const optimizeCoords = async (
-    rotaId: number,
-    rota: Rota
-  ): Promise<{ latitude: number; longitude: number }[] | null> => {
-    const pedidosIds = Array.isArray(rota.pedidos) ? rota.pedidos.map((p) => p.pedido.id) : [];
-    if (pedidosIds.length < 2) return null;
-
-    try {
-      const payload = {
-        pedidos_ids: pedidosIds,
-        deposito: { latitude: -27.3585648, longitude: -53.3996933 },
-      };
-      const resp = await fetch("/api/proxy/otimizar-rota-genetico", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const txt = await resp.text();
-      const data = txt ? JSON.parse(txt) : {};
-      const ordemIdx: number[] = data?.resultado?.rota_otimizada ?? [];
-      if (!Array.isArray(ordemIdx) || ordemIdx.length === 0) return null;
-      const coords = ordemIdx
-        .map((idx) => rota.pedidos?.[idx])
-        .filter(Boolean)
-        .map((p) => {
-          const lat = typeof p!.pedido.latitude === "string" ? parseFloat(p!.pedido.latitude) : p!.pedido.latitude;
-          const lng = typeof p!.pedido.longitude === "string" ? parseFloat(p!.pedido.longitude) : p!.pedido.longitude;
-          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-          return { latitude: lat, longitude: lng };
-        })
-        .filter(Boolean) as { latitude: number; longitude: number }[];
-      return coords.length > 0 ? coords : null;
     } catch {
       return null;
     }
@@ -365,10 +245,8 @@ export default function RotasPage() {
                               }
                               const pedidos = Array.isArray(det?.pedidos) ? [...det.pedidos] : [];
                               pedidos.sort((a, b) => (a.ordem_entrega || 0) - (b.ordem_entrega || 0));
-                              let coords = optimizedCoords[rota.id];
-                              if (!coords) {
-                                const opt = await optimizeCoords(rota.id, det!);
-                                coords = opt || pedidos
+                              const coords =
+                                pedidos
                                   .map((p) => {
                                     const lat = typeof p.pedido.latitude === "string" ? parseFloat(p.pedido.latitude) : p.pedido.latitude;
                                     const lng = typeof p.pedido.longitude === "string" ? parseFloat(p.pedido.longitude) : p.pedido.longitude;
@@ -376,10 +254,6 @@ export default function RotasPage() {
                                     return { latitude: lat, longitude: lng };
                                   })
                                   .filter(Boolean) as { latitude: number; longitude: number }[];
-                                if (coords && coords.length > 0) {
-                                  setOptimizedCoords((prev) => ({ ...prev, [rota.id]: coords! }));
-                                }
-                              }
                               if (coords && coords.length > 0) {
                                 const link = buildMapsLink(coords);
                                 if (link) window.open(link, "_blank", "noopener,noreferrer");
