@@ -54,6 +54,7 @@ export default function NovoPedidoPage() {
   const [form, setForm] = useState({
     nf: "",
     cliente: "",
+    cidade: "",
     dtpedido: "",
     observacao: "",
     latitude: "",
@@ -123,6 +124,10 @@ export default function NovoPedidoPage() {
       setError("Informe o cliente.");
       return;
     }
+    if (!form.cidade.trim()) {
+      setError("Informe a cidade.");
+      return;
+    }
     if (!form.dtpedido.trim()) {
       setError("Informe a data do pedido.");
       return;
@@ -144,6 +149,7 @@ export default function NovoPedidoPage() {
       const payload = {
         nf: Number(form.nf),
         cliente: form.cliente.trim(),
+        cidade: form.cidade.trim(),
         dtpedido: form.dtpedido,
         observacao: form.observacao || null,
         latitude: latNum,
@@ -242,6 +248,15 @@ export default function NovoPedidoPage() {
                 className={styles.input}
                 value={form.cliente}
                 onChange={(e) => setForm((prev) => ({ ...prev, cliente: e.target.value }))}
+              />
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="cidade">Cidade</label>
+              <input
+                id="cidade"
+                className={styles.input}
+                value={form.cidade}
+                onChange={(e) => setForm((prev) => ({ ...prev, cidade: e.target.value }))}
               />
             </div>
             <div className={styles.field}>

@@ -80,7 +80,14 @@ export function OrdersTable({
             </tr>
           )}
           {!loading &&
-            pedidos.map((pedido) => (
+            pedidos.map((pedido) => {
+              const cidade =
+                (pedido as any).cidade ||
+                (pedido as any).endereco_cidade ||
+                (pedido as any).endereco ||
+                (pedido as any).endereco_resumido ||
+                "";
+              return (
               <tr key={pedido.id}>
                 <td>
                   <input
@@ -93,7 +100,7 @@ export function OrdersTable({
                 <td>{pedido.id}</td>
                 <td>{pedido.nf}</td>
                 <td>{pedido.cliente ?? "-"}</td>
-                <td>{pedido.cidade ?? "-"}</td>
+                <td>{cidade || "-"}</td>
                 <td>{formatDateBR(pedido.dtpedido)}</td>
                 <td>{pedido._totalItens ?? 0}</td>
                 <td>{pedido._pesoTotal ?? "-"}</td>
@@ -125,7 +132,8 @@ export function OrdersTable({
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
         </tbody>
       </table>
     </section>

@@ -225,7 +225,7 @@ export default function InicioPage() {
                     <th>Cliente</th>
                     <th>Data</th>
                     <th>Itens</th>
-                    <th>Rota</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -238,9 +238,9 @@ export default function InicioPage() {
                       <td>{totalItens(p)}</td>
                       <td>
                         {Array.isArray((p as any).rotas) && (p as any).rotas.length > 0 ? (
-                          <span className={`${styles.badge} ${styles.ok}`}>Com rota</span>
+                          <span className={`${styles.badge} ${styles.ok}`}>Rota gerada</span>
                         ) : (
-                          <span className={`${styles.badge} ${styles.warn}`}>Sem rota</span>
+                          <span className={`${styles.badge} ${styles.warn}`}>Pendente</span>
                         )}
                       </td>
                     </tr>
