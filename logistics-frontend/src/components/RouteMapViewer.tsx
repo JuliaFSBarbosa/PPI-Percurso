@@ -11,8 +11,8 @@ type RouteMapViewerProps = {
 };
 
 /**
- * Visualizador de rota usando Leaflet carregado via CDN (sem pacote local).
- * Evita falha de build por ausência do módulo "leaflet".
+ * Visualizador de rota usando Leaflet via CDN (sem depender do pacote local).
+ * Inclui invalidateSize para funcionar em contêiner oculto e evitar corte em screenshots.
  */
 export default function RouteMapViewer({ pontos }: RouteMapViewerProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -74,7 +74,10 @@ export default function RouteMapViewer({ pontos }: RouteMapViewerProps) {
         });
       }
 
-      map = L.map(mapRef.current).setView([pontos[0].latitude, pontos[0].longitude], 13);
+      map = L.map(mapRef.current, {
+        preferCanvas: true,
+        zoomControl: false,
+      }).setView([pontos[0].latitude, pontos[0].longitude], 13);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap",
@@ -84,12 +87,23 @@ export default function RouteMapViewer({ pontos }: RouteMapViewerProps) {
         L.marker([p.latitude, p.longitude]).addTo(map).bindPopup(p.label || "Ponto");
       });
 
+      const renderer = L.canvas({ padding: 0.5 });
       const polyline = L.polyline(
         pontos.map((p) => [p.latitude, p.longitude]) as [number, number][],
-        { color: "blue" }
+        { color: "blue", weight: 4, renderer }
       ).addTo(map);
 
-      map.fitBounds(polyline.getBounds());
+      map.fitBounds(polyline.getBounds(), { padding: [16, 16] });
+
+      // Reajusta dimensão quando renderizado off-screen (evita corte em screenshots)
+      setTimeout(() => {
+        try {
+          map.invalidateSize();
+          map.fitBounds(polyline.getBounds(), { padding: [16, 16] });
+        } catch (err) {
+          console.warn("Falha ao ajustar mapa", err);
+        }
+      }, 300);
     };
 
     init();

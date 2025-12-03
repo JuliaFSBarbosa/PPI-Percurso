@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import styles from "../inicio/styles.module.css";
+import RouteMapViewer from "@/components/RouteMapViewer";
 
 const inter = InterFont({ subsets: ["latin"] });
 
@@ -94,7 +95,35 @@ export default function RotasPage() {
   const [rotaDetails, setRotaDetails] = useState<Record<number, Rota>>({});
   const [modalPedidos, setModalPedidos] = useState<{ rotaId: number; pedidos: RotaPedido[] } | null>(null);
   const [loadingPedidosId, setLoadingPedidosId] = useState<number | null>(null);
-  const [loadingMapsId, setLoadingMapsId] = useState<number | null>(null); 
+  const [loadingMapsId, setLoadingMapsId] = useState<number | null>(null);
+  const [loadingPdfId, setLoadingPdfId] = useState<number | null>(null);
+  const [snapshotCoords, setSnapshotCoords] = useState<{ latitude: number; longitude: number; label?: string }[] | null>(
+    null
+  );
+  const snapshotRef = useRef<HTMLDivElement | null>(null);
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const ensureHtml2Canvas = async () => {
+    if (typeof window === "undefined") return null;
+    if ((window as any).html2canvas) return (window as any).html2canvas;
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.getElementById("html2canvas-js") as HTMLScriptElement | null;
+      if (existing) {
+        existing.onload = () => resolve();
+        existing.onerror = () => reject(new Error("Falha ao carregar html2canvas"));
+        return;
+      }
+      const script = document.createElement("script");
+      script.id = "html2canvas-js";
+      script.src = "https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js";
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Falha ao carregar html2canvas"));
+      document.body.appendChild(script);
+    });
+    return (window as any).html2canvas || null;
+  };
 
   const displayName = useMemo(
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
@@ -143,6 +172,23 @@ export default function RotasPage() {
       setRotaDetails((prev) => ({ ...prev, [rotaId]: parsed.data }));
       return parsed.data;
     } catch {
+      return null;
+    }
+  };
+
+  const capturarMapa = async (coords: { latitude: number; longitude: number; label?: string }[]) => {
+    if (!coords || coords.length === 0) return null;
+    setSnapshotCoords(coords);
+    await sleep(800); // tempo para o Leaflet carregar tiles
+    const html2canvas = await ensureHtml2Canvas();
+    if (!html2canvas || !snapshotRef.current) return null;
+    try {
+      const canvas = await html2canvas(snapshotRef.current, { useCORS: true, scale: 2 });
+      const dataUrl = canvas.toDataURL("image/png");
+      if (!dataUrl.startsWith("data:image/png;base64,")) return null;
+      return dataUrl.replace("data:image/png;base64,", "");
+    } catch (err) {
+      console.warn("Falha ao capturar mapa para o PDF", err);
       return null;
     }
   };
@@ -209,18 +255,19 @@ export default function RotasPage() {
                 <th>Total pedidos</th>
                 <th>Peso total</th>
                 <th>Mapa</th>
+                <th>Relatorio</th>
                 <th>Pedidos</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={6}>Carregando rotas...</td>
+                  <td colSpan={7}>Carregando rotas...</td>
                 </tr>
               )}
               {!loading && rotas.length === 0 && (
                 <tr>
-                  <td colSpan={6}>Nenhuma rota cadastrada.</td>
+                  <td colSpan={7}>Nenhuma rota cadastrada.</td>
                 </tr>
               )}
               {!loading &&
@@ -267,6 +314,70 @@ export default function RotasPage() {
                           {loadingMapsId === rota.id ? "Abrindo..." : "Abrir no Maps"}
                         </button>
                       </div>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                        onClick={async () => {
+                          setLoadingPdfId(rota.id);
+                          try {
+                            let det = rotaDetails[rota.id] || (await fetchRotaDetail(rota.id));
+                            const pedidos = Array.isArray(det?.pedidos) ? [...det.pedidos] : [];
+                            pedidos.sort((a, b) => (a.ordem_entrega || 0) - (b.ordem_entrega || 0));
+                            const coords =
+                              pedidos
+                                .map((p, idx) => {
+                                  const lat =
+                                    typeof p.pedido.latitude === "string"
+                                      ? parseFloat(p.pedido.latitude)
+                                      : p.pedido.latitude;
+                                  const lng =
+                                    typeof p.pedido.longitude === "string"
+                                      ? parseFloat(p.pedido.longitude)
+                                      : p.pedido.longitude;
+                                  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+                                  return { latitude: lat, longitude: lng, label: `#${idx + 1}` };
+                                })
+                                .filter(Boolean) as { latitude: number; longitude: number; label?: string }[];
+
+                            let mapImageBase64: string | null = null;
+                            if (coords.length > 0) {
+                              mapImageBase64 = await capturarMapa(coords);
+                            }
+
+                            const payload: any = { rota_id: rota.id };
+                            if (mapImageBase64) payload.map_image_base64 = mapImageBase64;
+
+                            const resp = await fetch("/api/proxy/rotas/relatorio-pdf", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(payload),
+                            });
+                            const contentType = resp.headers.get("content-type") || "";
+                            if (!resp.ok || !contentType.includes("pdf")) {
+                              const raw = await resp.text();
+                              throw new Error(parseError(raw, "Falha ao gerar PDF da rota.", resp.status));
+                            }
+                            const blob = await resp.blob();
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.href = url;
+                            link.download = `relatorio_rota_${rota.id}.pdf`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : "Nao foi possivel baixar o relatorio.");
+                          } finally {
+                            setLoadingPdfId(null);
+                          }
+                        }}
+                        disabled={loadingPdfId === rota.id}
+                      >
+                        {loadingPdfId === rota.id ? "Gerando..." : "Baixar PDF"}
+                      </button>
                     </td>
                     <td>
                       <button
@@ -351,6 +462,14 @@ export default function RotasPage() {
             </div>
           )}
         </section>
+        {/* Container oculto para renderizar o mapa a ser capturado para o PDF */}
+        <div
+          ref={snapshotRef}
+          style={{ position: "absolute", left: "-9999px", top: 0, width: "600px", height: "400px" }}
+          aria-hidden
+        >
+          {snapshotCoords && snapshotCoords.length > 0 && <RouteMapViewer pontos={snapshotCoords} />}
+        </div>
       </main>
     </div>
   );

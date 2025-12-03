@@ -1,11 +1,11 @@
-import random
 import math
-from typing import List, Tuple
+import random
 import time
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def calcular_distancia(coord1: Tuple[float, float], coord2: Tuple[float, float]) -> float:
-    # Distância Haversine em quilômetros entre dois pontos (lat, lon).
+    # Distancia Haversine em quilometros entre dois pontos (lat, lon).
     lat1, lon1 = coord1
     lat2, lon2 = coord2
 
@@ -25,12 +25,11 @@ def calcular_distancia(coord1: Tuple[float, float], coord2: Tuple[float, float])
 
 
 def avaliar_rota(rota: List[int], coordenadas: List[Tuple[float, float]], deposito: Tuple[float, float]) -> float:
-    # Custo total da rota: depósito -> pontos -> depósito.
+    # Custo total da rota: deposito -> pontos -> deposito.
     if not rota:
         return 0
 
-    custo_total = 0
-    custo_total += calcular_distancia(deposito, coordenadas[rota[0]])
+    custo_total = calcular_distancia(deposito, coordenadas[rota[0]])
 
     for i in range(len(rota) - 1):
         coord_atual = coordenadas[rota[i]]
@@ -43,6 +42,9 @@ def avaliar_rota(rota: List[int], coordenadas: List[Tuple[float, float]], deposi
 
 def criar_populacao_inicial(tamanho_pop: int, num_pedidos: int) -> List[List[int]]:
     # Gera rotas iniciais embaralhadas.
+    if num_pedidos == 0:
+        return []
+
     populacao = []
     rota_base = list(range(num_pedidos))
 
@@ -55,7 +57,7 @@ def criar_populacao_inicial(tamanho_pop: int, num_pedidos: int) -> List[List[int
 
 
 def selecao_torneio(populacao: List[List[int]], fitness: List[float], tamanho_torneio: int = 3) -> List[int]:
-    # Seleção por torneio; menor fitness vence.
+    # Selecao por torneio; menor fitness vence.
     indices_torneio = random.sample(range(len(populacao)), tamanho_torneio)
     vencedor_idx = min(indices_torneio, key=lambda i: fitness[i])
     return populacao[vencedor_idx].copy()
@@ -111,6 +113,62 @@ def mutacao_inversao(rota: List[int], taxa_mutacao: float = 0.1) -> List[int]:
     return rota
 
 
+def _preparar_parametros(parametros: Dict[str, Any], num_pedidos: int) -> Dict[str, Any]:
+    """Normaliza e limita parametros do GA para evitar entradas extremas."""
+    defaults = {
+        "tamanho_pop": 100,
+        "num_geracoes": 500,
+        "taxa_crossover": 0.8,
+        "taxa_mutacao": 0.2,
+        "elitismo": 2,
+    }
+
+    seguros: Dict[str, Any] = defaults.copy()
+
+    def _clamp(valor: float, minimo: float, maximo: float) -> float:
+        return max(minimo, min(maximo, valor))
+
+    min_pop = max(4, num_pedidos)
+    max_pop = 500
+    min_geracoes = 10
+    max_geracoes = 1000
+
+    if "tamanho_pop" in parametros:
+        try:
+            seguros["tamanho_pop"] = int(_clamp(int(parametros["tamanho_pop"]), min_pop, max_pop))
+        except (TypeError, ValueError):
+            pass
+
+    if "num_geracoes" in parametros:
+        try:
+            seguros["num_geracoes"] = int(_clamp(int(parametros["num_geracoes"]), min_geracoes, max_geracoes))
+        except (TypeError, ValueError):
+            pass
+
+    if "taxa_crossover" in parametros:
+        try:
+            seguros["taxa_crossover"] = float(_clamp(float(parametros["taxa_crossover"]), 0.0, 1.0))
+        except (TypeError, ValueError):
+            pass
+
+    if "taxa_mutacao" in parametros:
+        try:
+            seguros["taxa_mutacao"] = float(_clamp(float(parametros["taxa_mutacao"]), 0.0, 1.0))
+        except (TypeError, ValueError):
+            pass
+
+    if "elitismo" in parametros:
+        try:
+            seguros["elitismo"] = int(max(1, int(parametros["elitismo"])))
+        except (TypeError, ValueError):
+            pass
+
+    # Garante que elitismo nao seja maior que a populacao final.
+    seguros["elitismo"] = min(seguros["elitismo"], seguros["tamanho_pop"])
+
+    return seguros
+
+
 def algoritmo_genetico(
     pedidos_coords: List[Tuple[float, float]],
     deposito_coords: Tuple[float, float],
@@ -120,10 +178,27 @@ def algoritmo_genetico(
     taxa_mutacao: float = 0.2,
     elitismo: int = 2,
 ) -> dict:
-    # Algoritmo genético para otimizar a ordem de entregas.
+    # Algoritmo genetico para otimizar a ordem de entregas.
     inicio_tempo = time.time()
 
     num_pedidos = len(pedidos_coords)
+    if num_pedidos == 0:
+        return {
+            "rota_otimizada": [],
+            "distancia_total_km": 0,
+            "num_geracoes": 0,
+            "tempo_execucao_s": 0,
+            "historico_melhor": [],
+            "historico_media": [],
+            "melhoria_percentual": 0,
+        }
+
+    tamanho_pop = max(4, min(int(tamanho_pop), 1000))
+    elitismo = max(1, min(int(elitismo), tamanho_pop))
+    num_geracoes = max(1, int(num_geracoes))
+    taxa_crossover = float(max(0.0, min(taxa_crossover, 1.0)))
+    taxa_mutacao = float(max(0.0, min(taxa_mutacao, 1.0)))
+
     populacao = criar_populacao_inicial(tamanho_pop, num_pedidos)
 
     historico_melhor = []
@@ -132,6 +207,7 @@ def algoritmo_genetico(
     melhor_rota_global = None
     melhor_fitness_global = float("inf")
     geracoes_sem_melhora = 0
+    max_sem_melhora = max(50, num_geracoes // 2)
 
     for geracao in range(num_geracoes):
         fitness = [avaliar_rota(rota, pedidos_coords, deposito_coords) for rota in populacao]
@@ -150,11 +226,10 @@ def algoritmo_genetico(
         historico_melhor.append(melhor_fitness)
         historico_media.append(sum(fitness) / len(fitness))
 
-        if geracoes_sem_melhora > 100:
-            print(f"Convergiu na geracao {geracao}")
+        if geracoes_sem_melhora > max_sem_melhora:
             break
 
-        nova_populacao = []
+        nova_populacao: List[List[int]] = []
 
         indices_elite = sorted(range(len(fitness)), key=lambda i: fitness[i])[:elitismo]
         for idx in indices_elite:
@@ -186,7 +261,8 @@ def algoritmo_genetico(
     melhoria_percentual = 0
     if historico_melhor and historico_melhor[0]:
         melhoria_percentual = round(
-            (historico_melhor[0] - melhor_fitness_global) / historico_melhor[0] * 100, 2
+            (historico_melhor[0] - melhor_fitness_global) / historico_melhor[0] * 100,
+            2,
         )
 
     return {
@@ -200,28 +276,35 @@ def algoritmo_genetico(
     }
 
 
-def otimizar_rota_pedidos(pedidos: List[dict], deposito: dict) -> dict:
-    # Converte pedidos e depósito para o GA e retorna rota otimizada.
+def otimizar_rota_pedidos(
+    pedidos: List[dict],
+    deposito: dict,
+    parametros: Optional[Dict[str, Any]] = None,
+) -> dict:
+    # Converte pedidos e deposito para o GA e retorna rota otimizada.
     pedidos_coords = [(p["latitude"], p["longitude"]) for p in pedidos]
     deposito_coords = (deposito["latitude"], deposito["longitude"])
+
+    parametros_tratados = _preparar_parametros(parametros or {}, num_pedidos=len(pedidos_coords))
 
     resultado = algoritmo_genetico(
         pedidos_coords=pedidos_coords,
         deposito_coords=deposito_coords,
-        tamanho_pop=100,
-        num_geracoes=500,
-        taxa_crossover=0.8,
-        taxa_mutacao=0.2,
-        elitismo=2,
+        tamanho_pop=parametros_tratados["tamanho_pop"],
+        num_geracoes=parametros_tratados["num_geracoes"],
+        taxa_crossover=parametros_tratados["taxa_crossover"],
+        taxa_mutacao=parametros_tratados["taxa_mutacao"],
+        elitismo=parametros_tratados["elitismo"],
     )
 
-    rota_ids = [pedidos[idx]["id"] for idx in resultado["rota_otimizada"]]
+    rota_otimizada = resultado["rota_otimizada"] or []
+    rota_ids = [pedidos[idx]["id"] for idx in rota_otimizada]
 
     rota_coords = [
         {"latitude": deposito_coords[0], "longitude": deposito_coords[1], "tipo": "deposito", "ordem": 0}
     ]
 
-    for i, idx in enumerate(resultado["rota_otimizada"], 1):
+    for i, idx in enumerate(rota_otimizada, 1):
         rota_coords.append(
             {
                 "latitude": pedidos_coords[idx][0],
@@ -243,4 +326,5 @@ def otimizar_rota_pedidos(pedidos: List[dict], deposito: dict) -> dict:
         "tempo_execucao_s": resultado["tempo_execucao_s"],
         "num_geracoes": resultado["num_geracoes"],
         "melhoria_percentual": resultado["melhoria_percentual"],
+        "parametros_utilizados": parametros_tratados,
     }

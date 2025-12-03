@@ -1,16 +1,27 @@
 import logging
 import math
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from django.shortcuts import get_object_or_404
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .models import Pedido, Rota, RotaPedido
 from .ia.genetic_algorithm import otimizar_rota_pedidos
+from .models import Pedido, Rota, RotaPedido
+from .relatorios import gerar_relatorio_rota_pdf
 
 logger = logging.getLogger(__name__)
+
+
+def _coord_valida(lat_val, lng_val) -> bool:
+    try:
+        lat_num = float(lat_val)
+        lng_num = float(lng_val)
+    except Exception:
+        return False
+    return math.isfinite(lat_num) and math.isfinite(lng_num) and abs(lat_num) <= 90 and abs(lng_num) <= 180
 
 
 class OtimizarRotaGeneticoView(APIView):
@@ -26,14 +37,14 @@ class OtimizarRotaGeneticoView(APIView):
             if not pedidos_ids or len(pedidos_ids) < 2:
                 logger.warning("[GA] pedidos insuficientes para otimizar: %s", pedidos_ids)
                 return Response(
-                    {"error": "É necessário pelo menos 2 pedidos para otimização"},
+                    {"error": "E necessario pelo menos 2 pedidos para otimizacao"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             if not deposito or "latitude" not in deposito or "longitude" not in deposito:
                 logger.warning("[GA] deposito ausente ou incompleto: %s", deposito)
                 return Response(
-                    {"error": "Coordenadas do depósito são obrigatórias"},
+                    {"error": "Coordenadas do deposito sao obrigatorias"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -42,24 +53,16 @@ class OtimizarRotaGeneticoView(APIView):
             if pedidos.count() != len(pedidos_ids):
                 logger.warning("[GA] pedidos faltando; esperados=%s encontrados=%s", len(pedidos_ids), pedidos.count())
                 return Response(
-                    {"error": "Alguns pedidos não foram encontrados"},
+                    {"error": "Alguns pedidos nao foram encontrados"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            def coord_valida(lat_val, lng_val):
-                try:
-                    lat_num = float(lat_val)
-                    lng_num = float(lng_val)
-                except Exception:
-                    return False
-                return math.isfinite(lat_num) and math.isfinite(lng_num) and abs(lat_num) <= 90 and abs(lng_num) <= 180
-
             pedidos_data = []
             for pedido in pedidos:
-                if not coord_valida(pedido.latitude, pedido.longitude):
+                if not _coord_valida(pedido.latitude, pedido.longitude):
                     logger.warning("[GA] pedido %s com coordenadas invalidas: lat=%s lon=%s", pedido.id, pedido.latitude, pedido.longitude)
                     return Response(
-                        {"error": f"Pedido {pedido.id} está com latitude/longitude inválidas para otimização."},
+                        {"error": f"Pedido {pedido.id} esta com latitude/longitude invalidas para otimizacao."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 pedidos_data.append(
@@ -72,20 +75,21 @@ class OtimizarRotaGeneticoView(APIView):
                 )
 
             deposito_data = {"latitude": float(deposito["latitude"]), "longitude": float(deposito["longitude"])}
-            if not coord_valida(deposito_data["latitude"], deposito_data["longitude"]):
+            if not _coord_valida(deposito_data["latitude"], deposito_data["longitude"]):
                 logger.warning("[GA] deposito com coordenadas invalidas: %s", deposito_data)
                 return Response(
-                    {"error": "Depósito com latitude/longitude inválidas para otimização."},
+                    {"error": "Deposito com latitude/longitude invalidas para otimizacao."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             logger.info("[GA] iniciando otimizacao: pedidos=%s deposito=%s", pedidos_ids, deposito_data)
-            resultado = otimizar_rota_pedidos(pedidos_data, deposito_data)
+            resultado = otimizar_rota_pedidos(pedidos_data, deposito_data, parametros)
             logger.info(
-                "[GA] concluido: dist_km=%s geracoes=%s ordem=%s",
+                "[GA] concluido: dist_km=%s geracoes=%s ordem=%s params=%s",
                 resultado.get("distancia_total_km"),
                 resultado.get("num_geracoes"),
                 resultado.get("pedidos_ordem"),
+                resultado.get("parametros_utilizados"),
             )
 
             return Response(
@@ -95,7 +99,7 @@ class OtimizarRotaGeneticoView(APIView):
                     "num_geracoes": resultado.get("num_geracoes"),
                     "distancia_total_km": resultado.get("distancia_total_km"),
                     "resultado": resultado,
-                    "mensagem": f'Rota otimizada com sucesso! Distância total: {resultado["distancia_total_km"]} km',
+                    "mensagem": f'Rota otimizada com sucesso! Distancia total: {resultado["distancia_total_km"]} km',
                 },
                 status=status.HTTP_200_OK,
             )
@@ -128,7 +132,7 @@ class SalvarRotaOtimizadaView(APIView):
 
             if not data_rota or not capacidade_max or not pedidos_ordem:
                 return Response(
-                    {"error": "Dados obrigatórios faltando"},
+                    {"error": "Dados obrigatorios faltando"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -175,7 +179,7 @@ class CompararAlgoritmosView(APIView):
 
             if not pedidos_ids or not deposito:
                 return Response(
-                    {"error": "Dados obrigatórios faltando"},
+                    {"error": "Dados obrigatorios faltando"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -253,5 +257,85 @@ class CompararAlgoritmosView(APIView):
             logger.exception("[GA] erro ao comparar algoritmos")
             return Response(
                 {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class GerarRelatorioRotaPDFView(APIView):
+    """Gera um relatorio em PDF da rota, incluindo mapa e peso total."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            rota_id = request.data.get("rota_id")
+            distancia_total_km = request.data.get("distancia_total_km")
+            deposito = request.data.get("deposito")
+            rota_coordenadas = request.data.get("rota_coordenadas")
+            map_image_base64 = request.data.get("map_image_base64")
+
+            if not rota_id:
+                return Response({"error": "rota_id e obrigatorio"}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                rota = Rota.objects.prefetch_related("pedidos__pedido__itens__produto").get(pk=rota_id)
+            except Rota.DoesNotExist:
+                return Response({"error": "Rota nao encontrada"}, status=status.HTTP_404_NOT_FOUND)
+
+            deposito_data = None
+            if deposito:
+                if "latitude" not in deposito or "longitude" not in deposito:
+                    return Response(
+                        {"error": "deposito precisa de latitude e longitude"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if not _coord_valida(deposito["latitude"], deposito["longitude"]):
+                    return Response(
+                        {"error": "Coordenadas do deposito sao invalidas"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                deposito_data = {"latitude": float(deposito["latitude"]), "longitude": float(deposito["longitude"])}
+
+            rota_coordenadas_norm = None
+            if rota_coordenadas:
+                rota_coordenadas_norm = []
+                if not isinstance(rota_coordenadas, list):
+                    return Response(
+                        {"error": "rota_coordenadas deve ser uma lista de objetos com latitude/longitude"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                for idx, ponto in enumerate(rota_coordenadas):
+                    try:
+                        rota_coordenadas_norm.append(
+                            {
+                                "latitude": float(ponto["latitude"]),
+                                "longitude": float(ponto["longitude"]),
+                                "tipo": ponto.get("tipo", "entrega"),
+                                "ordem": ponto.get("ordem", idx),
+                            }
+                        )
+                    except Exception:
+                        return Response(
+                            {"error": "Nao foi possivel interpretar rota_coordenadas; verifique latitude/longitude"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+            pdf_bytes = gerar_relatorio_rota_pdf(
+                rota=rota,
+                distancia_total_km=distancia_total_km,
+                deposito_coords=deposito_data,
+                rota_coordenadas=rota_coordenadas_norm,
+                map_image_base64=map_image_base64,
+            )
+
+            nome_arquivo = f"relatorio_rota_{rota.id}.pdf"
+            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            response["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
+            return response
+
+        except Exception as e:
+            logger.exception("[GA] erro ao gerar relatorio PDF da rota")
+            return Response(
+                {"error": "Erro ao gerar relatorio da rota", "detalhes": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
