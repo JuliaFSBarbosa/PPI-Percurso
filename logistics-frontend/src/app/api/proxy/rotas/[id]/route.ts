@@ -45,6 +45,22 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   });
 }
 
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const hdr = await buildHeaders(req);
+  if (!hdr["Content-Type"]) hdr["Content-Type"] = "application/json";
+  const body = await req.text();
+  const upstream = await fetch(`${writePath}${params.id}/`, {
+    method: "PATCH",
+    headers: hdr,
+    body,
+  });
+  const text = await upstream.text();
+  return new Response(text, {
+    status: upstream.status,
+    headers: { "Content-Type": upstream.headers.get("content-type") || "application/json" },
+  });
+}
+
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   const hdr = await buildHeaders();
   const upstream = await fetch(`${writePath}${params.id}/`, {

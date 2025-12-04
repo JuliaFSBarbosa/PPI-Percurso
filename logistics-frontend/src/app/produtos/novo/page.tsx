@@ -153,7 +153,14 @@ export default function NovoProdutoPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-            <div className={styles.avatar}>{avatarLetter}</div>
+            <Link
+              href="/configuracoes"
+              className={styles.avatar}
+              aria-label="Ir para usuários"
+              title="Ir para usuários"
+            >
+              {avatarLetter}
+            </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
               <small>Administrador</small>
@@ -252,4 +259,3 @@ export default function NovoProdutoPage() {
     </div>
   );
 }
-

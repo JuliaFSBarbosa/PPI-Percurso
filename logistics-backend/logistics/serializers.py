@@ -307,6 +307,18 @@ class PedidoCreateSerializer(serializers.ModelSerializer):
             'usuario_id', 'cliente', 'cidade', 'nf', 'observacao', 'dtpedido',
             'latitude', 'longitude', 'itens'
         ]
+
+    def validate_nf(self, value):
+        """
+        Garante que a NF seja única mesmo antes do constraint do banco,
+        permitindo mensagem amigável.
+        """
+        qs = Pedido.objects.filter(nf=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError('Nota Fiscal já cadastrada no sistema, verifique o número digitado!')
+        return value
     
     def create(self, validated_data):
         """
@@ -392,4 +404,3 @@ class RotaCreateSerializer(serializers.ModelSerializer):
             )
         
         return rota
-

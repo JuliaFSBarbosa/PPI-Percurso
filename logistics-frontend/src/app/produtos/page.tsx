@@ -134,7 +134,14 @@ export default function ProdutosPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-            <div className={styles.avatar}>{avatarLetter}</div>
+            <Link
+              href="/configuracoes"
+              className={styles.avatar}
+              aria-label="Ir para usuários"
+              title="Ir para usuários"
+            >
+              {avatarLetter}
+            </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
               <small>Administrador</small>
@@ -198,7 +205,7 @@ export default function ProdutosPage() {
                         </span>
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <div className={`${styles.actionsRow} ${styles.actionsInline}`}>
                           <button
                             type="button"
                             className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
@@ -285,13 +292,34 @@ export default function ProdutosPage() {
                       <strong>{family.nome}</strong>
                       <span>{family.descricao ?? "Sem descrição"}</span>
                     </div>
-                    <div className={styles.familyActions}>
+                    <div className={`${styles.familyActions} ${styles.actionsInline}`}>
                       <button
                         type="button"
                         className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
                         onClick={() => router.push(`/produtos/familias/${family.id}/editar`)}
                       >
                         Editar
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                        onClick={async () => {
+                          if (!confirm(`Excluir a família "${family.nome}"?`)) return;
+                          try {
+                            const resp = await fetch(`/api/proxy/familias/${family.id}`, {
+                              method: "DELETE",
+                            });
+                            if (!resp.ok) {
+                              const text = await resp.text();
+                              throw new Error(text || "Falha ao excluir família.");
+                            }
+                            setFamilias((prev) => prev.filter((f) => f.id !== family.id));
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Erro ao excluir família.");
+                          }
+                        }}
+                      >
+                        Excluir
                       </button>
                     </div>
                   </li>
@@ -303,4 +331,3 @@ export default function ProdutosPage() {
     </div>
   );
 }
-

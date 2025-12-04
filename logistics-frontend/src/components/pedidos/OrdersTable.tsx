@@ -1,6 +1,7 @@
 "use client";
 
 import styles from "@/app/inicio/styles.module.css";
+import { statusLabels } from "@/constants/labels";
 
 type PedidoLinha = {
   id: number;
@@ -12,6 +13,18 @@ type PedidoLinha = {
   _pesoTotal?: number;
   _volumeTotal?: number;
   rota?: number | null;
+  rotas?: { id: number; status: RotaStatus; data_rota: string }[];
+};
+
+type PaginationProps = {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+  canPrev: boolean;
+  canNext: boolean;
+  loading: boolean;
+  onPrev: () => void;
+  onNext: () => void;
 };
 
 type Props = {
@@ -24,6 +37,7 @@ type Props = {
   deletingId: number | null;
   loading: boolean;
   formatDateBR: (value: any) => string;
+  pagination?: PaginationProps;
 };
 
 export function OrdersTable({
@@ -36,6 +50,7 @@ export function OrdersTable({
   deletingId,
   loading,
   formatDateBR,
+  pagination,
 }: Props) {
   const allSelected = pedidos.length > 0 && selectedIds.length === pedidos.length;
 
@@ -82,13 +97,42 @@ export function OrdersTable({
           {!loading &&
             pedidos.map((pedido) => {
               const cidade = (pedido as any).cidade || "";
+              const rotasAssociadas = Array.isArray((pedido as any).rotas) ? (pedido as any).rotas : [];
+              const possuiResumoRota = pedido.rota !== null && typeof pedido.rota !== "undefined";
+              let badgeClass = `${styles.badge} ${styles.warn}`;
+              let badgeText = "Pendente";
+
+              if (rotasAssociadas.length > 0) {
+                const todasConcluidas = rotasAssociadas.every((rota) => rota.status === "CONCLUIDA");
+                const algumaExecucao = rotasAssociadas.some((rota) => rota.status === "EM_EXECUCAO");
+                if (todasConcluidas) {
+                  badgeClass = `${styles.badge} ${styles.done}`;
+                  badgeText = statusLabels.CONCLUIDA;
+                } else if (algumaExecucao) {
+                  badgeClass = `${styles.badge} ${styles.statusInfo}`;
+                  badgeText = statusLabels.EM_EXECUCAO;
+                } else {
+                  badgeClass = `${styles.badge} ${styles.late}`;
+                  badgeText = statusLabels.PLANEJADA;
+                }
+              } else if (possuiResumoRota) {
+                badgeClass = `${styles.badge} ${styles.done}`;
+                badgeText = "Rota vinculada";
+              }
+              const pedidoEntregue =
+                rotasAssociadas.length > 0 && rotasAssociadas.every((rota) => rota.status === "CONCLUIDA");
+              const pedidoEmRotaAtiva =
+                rotasAssociadas.some((rota) => rota.status !== "CONCLUIDA") ||
+                (rotasAssociadas.length === 0 && possuiResumoRota);
+              const pedidoIndisponivel = pedidoEntregue || pedidoEmRotaAtiva;
               return (
               <tr key={pedido.id}>
                 <td>
                   <input
                     type="checkbox"
                     aria-label={`Selecionar pedido ${pedido.id}`}
-                    checked={selectedIds.includes(pedido.id)}
+                    checked={!pedidoIndisponivel && selectedIds.includes(pedido.id)}
+                    disabled={pedidoIndisponivel}
                     onChange={(e) => onToggleSelect(pedido.id, e.target.checked)}
                   />
                 </td>
@@ -101,11 +145,7 @@ export function OrdersTable({
                 <td>{pedido._pesoTotal ?? "-"}</td>
                 <td>{pedido._volumeTotal ?? "-"}</td>
                 <td>
-                  {pedido.rota !== null && typeof pedido.rota !== "undefined" ? (
-                    <span className={`${styles.badge} ${styles.ok}`}>Rota gerada</span>
-                  ) : (
-                    <span className={`${styles.badge} ${styles.warn}`}>Pendente</span>
-                  )}
+                  <span className={badgeClass}>{badgeText}</span>
                 </td>
                 <td>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -131,6 +171,33 @@ export function OrdersTable({
             })}
         </tbody>
       </table>
+      {pagination && (
+        <div className={styles.tableFooter}>
+          <span className={styles.muted}>
+            Página {pagination.currentPage} de {pagination.totalPages} ({pagination.totalCount} registros)
+          </span>
+          <div className={styles.paginationActions}>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+              disabled={!pagination.canPrev || pagination.loading}
+              aria-label="Página anterior"
+              onClick={pagination.onPrev}
+            >
+              &lt;
+            </button>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+              disabled={!pagination.canNext || pagination.loading}
+              aria-label="Próxima página"
+              onClick={pagination.onNext}
+            >
+              &gt;
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

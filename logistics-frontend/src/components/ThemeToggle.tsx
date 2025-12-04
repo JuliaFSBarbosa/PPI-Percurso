@@ -2,6 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { Sun, Moon } from "lucide-react";
 
 type ThemeToggleProps = {
   className?: string;
@@ -30,7 +31,15 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       aria-label={label}
       title={label}
     >
-      {mounted ? (isDark ? "Escuro" : "Claro") : "Tema"}
+      {mounted ? (
+        isDark ? (
+          <Moon size={16} strokeWidth={2} />
+        ) : (
+          <Sun size={16} strokeWidth={2} />
+        )
+      ) : (
+        <Sun size={16} strokeWidth={2} />
+      )}
     </button>
   );
 }

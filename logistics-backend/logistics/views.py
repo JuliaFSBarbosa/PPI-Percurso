@@ -2,9 +2,10 @@
 from datetime import datetime
 import io
 
-from django.db.models import Max, Sum
+from django.db.models import Max, Sum, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -87,6 +88,18 @@ class RotaCreateViewSet(viewsets.ModelViewSet):
     queryset = Rota.objects.all()
     serializer_class = RotaCreateSerializer
 
+    def perform_update(self, serializer):
+        rota_anterior = serializer.instance
+        status_anterior = rota_anterior.status if rota_anterior else None
+        rota = serializer.save()
+        if status_anterior == rota.status:
+            return
+
+        if rota.status == "CONCLUIDA":
+            rota.pedidos.update(entregue=True, data_entrega=timezone.now())
+        elif status_anterior == "CONCLUIDA":
+            rota.pedidos.update(entregue=False, data_entrega=None)
+
 
 class AtribuirPedidosRotaView(APIView):
     permission_classes = [IsAuthenticated]
@@ -134,6 +147,44 @@ class RemoverPedidoRotaView(APIView):
             {"success": True, "mensagem": f"{removidos} vinculos removidos do pedido {pedido.id}."},
             status=status.HTTP_200_OK,
         )
+
+
+class DashboardResumoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        data_param = request.query_params.get("data")
+        try:
+            if data_param:
+                data_ref = datetime.strptime(data_param, "%Y-%m-%d").date()
+            else:
+                data_ref = timezone.localdate()
+        except ValueError:
+            return Response(
+                {"detail": "Data inválida. Utilize o formato AAAA-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        pedidos_do_dia = Pedido.objects.filter(dtpedido=data_ref)
+        pedidos_pendentes = (
+            pedidos_do_dia.filter(
+                Q(rotas__isnull=True) | Q(rotas__rota__status__in=["PLANEJADA", "EM_EXECUCAO"])
+            )
+            .distinct()
+            .count()
+        )
+
+        rotas_do_dia = Rota.objects.filter(data_rota=data_ref)
+        resumo = {
+            "data_referencia": data_ref,
+            "total_pedidos": pedidos_do_dia.count(),
+            "pedidos_pendentes": pedidos_pendentes,
+            "rotas_geradas": rotas_do_dia.count(),
+            "rotas_em_execucao": rotas_do_dia.filter(status="EM_EXECUCAO").count(),
+            "rotas_finalizadas": rotas_do_dia.filter(status="CONCLUIDA").count(),
+        }
+
+        return Response(resumo, status=status.HTTP_200_OK)
 
 
 # ====================================================

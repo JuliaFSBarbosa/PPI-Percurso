@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState, ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, ChangeEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -11,34 +11,17 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { SelectedOrdersMap } from "@/components/pedidos/SelectedOrdersMap";
 import { OrdersTable } from "@/components/pedidos/OrdersTable";
 import styles from "../inicio/styles.module.css";
+import { parseApiError } from "@/lib/apiError";
 
 const inter = InterFont({ subsets: ["latin"] });
-const PAGE_SIZE = 200;
+const API_PAGE_SIZE = 200;
+const DISPLAY_PAGE_SIZE = 3;
 const defaultDeposito = { latitude: -27.3586, longitude: -53.3958 };
+const RAIO_OPTIONS = [3, 5, 8, 10, 12, 15, 20];
 const MapLocationPicker = dynamic(
   () => import("@/components/MapLocationPicker").then((mod) => ({ default: mod.MapLocationPicker })),
   { ssr: false, loading: () => <div>Carregando mapa...</div> }
 );
-
-const parseError = (raw: string, fallback: string, status?: number) => {
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed?.detail) return parsed.detail as string;
-    const first = parsed && Object.keys(parsed)[0];
-    if (first) {
-      const value = parsed[first];
-      if (Array.isArray(value)) return String(value[0]);
-      if (typeof value === "string") return value;
-    }
-  } catch {
-    const trimmed = raw.trim();
-    if (trimmed.startsWith("<")) {
-      return `${fallback} (status ${status ?? "desconhecido"})`;
-    }
-  }
-  return raw || fallback;
-};
 
 const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 const formatDateBR = (value: any) => {
@@ -55,7 +38,34 @@ const formatDateBR = (value: any) => {
   return asString;
 };
 
+const parseDateTimeToTimestamp = (value: any) => {
+  if (!value) return Number.NaN;
+  const parsed = new Date(value);
+  const ts = parsed.getTime();
+  if (!Number.isNaN(ts)) return ts;
+  const numeric = Number(value);
+  return Number.isNaN(numeric) ? Number.NaN : numeric;
+};
+
 const normalizeId = (value: number | string | null | undefined) => Number(value ?? 0);
+
+const parsePedidoDateToTimestamp = (value: any): number | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value.getTime();
+  const asString = String(value).trim();
+  const iso = asString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    const parsed = new Date(`${iso[1]}-${iso[2]}-${iso[3]}`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+  }
+  const br = asString.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (br) {
+    const parsed = new Date(`${br[3]}-${br[2]}-${br[1]}`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+  }
+  const parsed = new Date(asString);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+};
 
 type PedidoEnriquecido = Pedido & {
   _totalItens?: number;
@@ -64,9 +74,24 @@ type PedidoEnriquecido = Pedido & {
   cidade?: string;
   rota?: number | null;
 };
+const isPedidoEntregue = (pedido: any) => {
+  const rotas = Array.isArray((pedido as any).rotas) ? (pedido as any).rotas : [];
+  if (rotas.length === 0) return false;
+  return rotas.every((rota: any) => rota.status === "CONCLUIDA");
+};
+
+const isPedidoEmRotaAtiva = (pedido: any) => {
+  const rotas = Array.isArray((pedido as any).rotas) ? (pedido as any).rotas : [];
+  if (rotas.length > 0) {
+    return rotas.some((rota: any) => rota.status !== "CONCLUIDA");
+  }
+  const rotaDireta = (pedido as any).rota;
+  return typeof rotaDireta !== "undefined" && rotaDireta !== null;
+};
 
 export default function PedidosPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,12 +99,20 @@ export default function PedidosPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [info, setInfo] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [displayPage, setDisplayPage] = useState(1);
+  const [nextApiOffset, setNextApiOffset] = useState(0);
   const [savingRouteId, setSavingRouteId] = useState<number | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   const [depositoCoords, setDepositoCoords] = useState(defaultDeposito);
   const [showDepositoMap, setShowDepositoMap] = useState(false);
+  const selectionSectionRef = useRef<HTMLDivElement | null>(null);
+  const [basePedidoId, setBasePedidoId] = useState<number | null>(null);
+  const [raioKm, setRaioKm] = useState(RAIO_OPTIONS[0]);
+  const [aplicandoRaio, setAplicandoRaio] = useState(false);
+  const [raioErro, setRaioErro] = useState<string | null>(null);
+  const [raioInfo, setRaioInfo] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const handleDepositoChange = (field: "latitude" | "longitude") => (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -91,6 +124,54 @@ export default function PedidosPage() {
     });
   };
 
+  const aplicarRaio = async () => {
+    if (!basePedidoId) {
+      setRaioErro("Selecione um pedido base.");
+      return;
+    }
+    setAplicandoRaio(true);
+    setRaioErro(null);
+     setRaioInfo(null);
+    try {
+      const resp = await fetch(
+        `/api/proxy/pedidos?pedido_base=${basePedidoId}&raio_km=${raioKm}&limit=500`,
+        { cache: "no-store" }
+      );
+      const raw = await resp.text();
+      if (!resp.ok) throw new Error(parseApiError(raw, "Falha ao buscar pedidos pelo raio.", resp.status));
+      const data = JSON.parse(raw) as API<APIGetPedidosResponse>;
+      if (!data.success) throw new Error(data.detail || "Erro ao aplicar raio.");
+      const proximos = data.data?.results ?? [];
+      const proximosValidos = proximos.filter((pedido: any) => !isPedidoEntregue(pedido) && !isPedidoEmRotaAtiva(pedido));
+      if (proximosValidos.length === 0) {
+        setRaioInfo(`Nenhum pedido elegível encontrado em ${raioKm} km do pedido ${basePedidoId}.`);
+        return;
+      }
+      setPedidos((prev) => {
+        const map = new Map<number, Pedido>();
+        prev.forEach((pedido) => map.set(normalizeId(pedido.id), pedido));
+        proximosValidos.forEach((pedido: any) => {
+          const idNorm = normalizeId(pedido.id);
+          if (Number.isFinite(idNorm)) {
+            map.set(idNorm, { ...pedido, id: idNorm } as Pedido);
+          }
+        });
+        return Array.from(map.values());
+      });
+      const novosIds = proximosValidos
+        .map((pedido: any) => normalizeId(pedido.id))
+        .filter((id) => Number.isFinite(id));
+      const baseIdNormalized = Number.isFinite(basePedidoId ?? NaN) ? Number(basePedidoId) : null;
+      const selecionadosAtualizados = [...new Set([...(baseIdNormalized ? [baseIdNormalized] : []), ...novosIds])];
+      setSelectedIds(selecionadosAtualizados);
+      setRaioInfo(`Encontrados ${proximosValidos.length} pedidos em até ${raioKm} km do pedido ${basePedidoId}.`);
+    } catch (err) {
+      setRaioErro(err instanceof Error ? err.message : "Não foi possível aplicar o raio.");
+    } finally {
+      setAplicandoRaio(false);
+    }
+  };
+
   const displayName = useMemo(
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
@@ -100,14 +181,20 @@ export default function PedidosPage() {
     [displayName]
   );
 
-  const loadPedidos = async (currentOffset: number) => {
-    setLoading(true);
-    setError(null);
-    setInfo(null);
+  const loadPedidos = async (currentOffset: number, replace = false): Promise<number> => {
+    if (replace) {
+      setLoading(true);
+      setError(null);
+      setInfo(null);
+    } else {
+      setLoadingMore(true);
+    }
     try {
-      const resp = await fetch(`/api/proxy/pedidos?limit=${PAGE_SIZE}&offset=${currentOffset}`, { cache: "no-store" });
+      const resp = await fetch(`/api/proxy/pedidos?limit=${API_PAGE_SIZE}&offset=${currentOffset}`, {
+        cache: "no-store",
+      });
       const raw = await resp.text();
-      if (!resp.ok) throw new Error(parseError(raw, "Não foi possível carregar os pedidos.", resp.status));
+      if (!resp.ok) throw new Error(parseApiError(raw, "Não foi possível carregar os pedidos.", resp.status));
       const data = JSON.parse(raw) as API<APIGetPedidosResponse>;
       if (!data.success) throw new Error(data.detail || "Erro ao buscar pedidos.");
       setTotalCount(data.data?.count ?? 0);
@@ -159,20 +246,50 @@ export default function PedidosPage() {
           } as Pedido)
       );
 
-      setPedidos(listaNormalizada);
+      setPedidos((prev) => {
+        if (replace) return listaNormalizada;
+        const map = new Map<number, Pedido>();
+        prev.forEach((pedido) => map.set(normalizeId(pedido.id), pedido));
+        listaNormalizada.forEach((pedido) => {
+          map.set(normalizeId(pedido.id), pedido);
+        });
+        return Array.from(map.values());
+      });
+      setNextApiOffset(currentOffset + listaNormalizada.length);
+      if (replace) {
+        setDisplayPage(1);
+      }
+      return listaNormalizada.length;
     } catch (err) {
-      setPedidos([]);
-      setError(err instanceof Error ? err.message : "Falha ao carregar pedidos.");
-      setInfo(null);
+      if (replace) {
+        setPedidos([]);
+        setError(err instanceof Error ? err.message : "Falha ao carregar pedidos.");
+        setInfo(null);
+      } else {
+        setError(err instanceof Error ? err.message : "Falha ao carregar pedidos adicionais.");
+      }
+      return 0;
     } finally {
-      setLoading(false);
+      if (replace) {
+        setLoading(false);
+      } else {
+        setLoadingMore(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadPedidos(offset);
+    if (searchParams?.get("tab") === "selecionar") {
+      setTimeout(() => {
+        selectionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 200);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    loadPedidos(0, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offset]);
+  }, []);
 
   const pedidosWithTotals = useMemo<PedidoEnriquecido[]>(() => {
     return pedidos.map((pedido) => {
@@ -219,33 +336,115 @@ export default function PedidosPage() {
     });
   }, [pedidos]);
 
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
-  const totalPages = Math.max(1, Math.ceil((totalCount || 0) / PAGE_SIZE) || 1);
-  const canPrev = offset > 0;
-  const canNext = offset + pedidos.length < totalCount;
+  const sortedPedidos = useMemo<PedidoEnriquecido[]>(() => {
+    const sorted = [...pedidosWithTotals];
+    sorted.sort((a, b) => {
+      const createdB = parseDateTimeToTimestamp((b as any).created_at ?? b.dtpedido);
+      const createdA = parseDateTimeToTimestamp((a as any).created_at ?? a.dtpedido);
+      const tsB = !Number.isNaN(createdB) ? createdB : parsePedidoDateToTimestamp(b.dtpedido);
+      const tsA = !Number.isNaN(createdA) ? createdA : parsePedidoDateToTimestamp(a.dtpedido);
+      const valueB = typeof tsB === "number" && !Number.isNaN(tsB) ? tsB : normalizeId(b.id);
+      const valueA = typeof tsA === "number" && !Number.isNaN(tsA) ? tsA : normalizeId(a.id);
+      const diff = valueB - valueA;
+      if (diff !== 0) return diff;
+      return normalizeId(b.id) - normalizeId(a.id);
+    });
+    return sorted;
+  }, [pedidosWithTotals]);
 
-  const selectedOrders = pedidosWithTotals.filter((p) => selectedIds.includes(p.id));
+  const displayedPedidos = useMemo<PedidoEnriquecido[]>(() => {
+    const startIndex = Math.max(0, (displayPage - 1) * DISPLAY_PAGE_SIZE);
+    return sortedPedidos.slice(startIndex, startIndex + DISPLAY_PAGE_SIZE);
+  }, [sortedPedidos, displayPage]);
+
+  const totalPages = useMemo(() => {
+    const baseCount = totalCount || sortedPedidos.length || 0;
+    const pages = Math.ceil(baseCount / DISPLAY_PAGE_SIZE);
+    return Math.max(1, pages || 1);
+  }, [totalCount, sortedPedidos.length]);
+  const canPrev = displayPage > 1;
+  const canNext = displayPage < totalPages;
+
+  useEffect(() => {
+    const maxPages = Math.max(1, Math.ceil(((totalCount || sortedPedidos.length || 0) / DISPLAY_PAGE_SIZE) || 1));
+    if (displayPage > maxPages) {
+      setDisplayPage(maxPages);
+    }
+  }, [displayPage, sortedPedidos.length, totalCount]);
+
+  const ensureDataForPage = async (targetPage: number) => {
+    const neededItems = targetPage * DISPLAY_PAGE_SIZE;
+    let loadedItems = sortedPedidos.length;
+    let offsetPointer = nextApiOffset;
+
+    while (neededItems > loadedItems && offsetPointer < totalCount) {
+      const fetched = await loadPedidos(offsetPointer, false);
+      if (fetched <= 0) {
+        break;
+      }
+      offsetPointer += fetched;
+      loadedItems += fetched;
+    }
+  };
+
+  const handleChangePage = async (targetPage: number) => {
+    if (targetPage < 1 || loading || loadingMore) return;
+    const maxPages = Math.max(1, Math.ceil(((totalCount || sortedPedidos.length || 0) / DISPLAY_PAGE_SIZE) || 1));
+    if (targetPage > maxPages) return;
+    await ensureDataForPage(targetPage);
+    setDisplayPage(targetPage);
+  };
+
+  const selectedOrders = pedidosWithTotals.filter(
+    (p) => selectedIds.includes(p.id) && !isPedidoEntregue(p) && !isPedidoEmRotaAtiva(p)
+  );
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const filtrados = prev.filter((id) => {
+        const pedido = pedidosWithTotals.find((p) => p.id === id);
+        return pedido && !isPedidoEntregue(pedido) && !isPedidoEmRotaAtiva(pedido);
+      });
+      if (filtrados.length !== prev.length) {
+        setInfo("Removemos pedidos que já fazem parte de outra rota.");
+      }
+      return filtrados;
+    });
+  }, [pedidosWithTotals]);
+
+  useEffect(() => {
+    if (selectedIds.length === 0) {
+      setBasePedidoId(null);
+      return;
+    }
+    if (!basePedidoId || !selectedIds.includes(basePedidoId)) {
+      setBasePedidoId(selectedIds[0]);
+    }
+  }, [selectedIds, basePedidoId]);
 
   const handleOptimize = async () => {
     setError(null);
     setInfo(null);
     setSavingRouteId(null);
-    if (selectedIds.length < 2) {
-      setError("Selecione pelo menos 2 pedidos para otimizar a rota.");
+
+    const selecionadosValidos = selectedIds
+      .map((id) => pedidosWithTotals.find((p) => p.id === id))
+      .filter((pedido): pedido is PedidoEnriquecido => {
+        if (!pedido) return false;
+        return !isPedidoEntregue(pedido) && !isPedidoEmRotaAtiva(pedido);
+      });
+
+    if (selecionadosValidos.length < 2) {
+      setError("Selecione pelo menos 2 pedidos disponíveis para otimizar a rota.");
       return;
     }
+
     setOptimizing(true);
     try {
       const hoje = new Date().toISOString().slice(0, 10);
-      const capacidade = pedidosWithTotals
-        .filter((p) => selectedIds.includes(p.id))
-        .reduce((sum, p) => sum + (Number(p._pesoTotal) || 0), 0);
+      const capacidade = selecionadosValidos.reduce((sum, p) => sum + (Number(p._pesoTotal) || 0), 0);
 
-      const selectedOrders = selectedIds
-        .map((id) => pedidosWithTotals.find((p) => p.id === id))
-        .filter(Boolean) as PedidoEnriquecido[];
-
-      const hasInvalidCoords = selectedOrders.some((p) => {
+      const hasInvalidCoords = selecionadosValidos.some((p) => {
         const lat = Number((p as any).latitude);
         const lng = Number((p as any).longitude);
         return !Number.isFinite(lat) || !Number.isFinite(lng);
@@ -261,12 +460,12 @@ export default function PedidosPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pedidos_ids: selectedOrders.map((p) => p.id),
+          pedidos_ids: selecionadosValidos.map((p) => p.id),
           deposito,
         }),
       });
       const otimizaText = await otimizaResp.text();
-      if (!otimizaResp.ok) throw new Error(parseError(otimizaText, "Falha ao otimizar rota.", otimizaResp.status));
+      if (!otimizaResp.ok) throw new Error(parseApiError(otimizaText, "Falha ao otimizar rota.", otimizaResp.status));
       const otimizaData = otimizaText ? JSON.parse(otimizaText) : {};
       const resultado =
         otimizaData?.resultado ||
@@ -280,7 +479,7 @@ export default function PedidosPage() {
       if ((!pedidosOrdenados || pedidosOrdenados.length === 0) && Array.isArray(resultado?.rota_otimizada)) {
         // rota_otimizada traz índices; converte para IDs na mesma ordem enviada
         pedidosOrdenados = resultado.rota_otimizada
-          .map((idx: number) => selectedOrders[idx]?.id)
+          .map((idx: number) => selecionadosValidos[idx]?.id)
           .filter((id: number | undefined): id is number => typeof id === "number");
       }
 
@@ -307,10 +506,14 @@ export default function PedidosPage() {
         }),
       });
       const text = await resp.text();
-      if (!resp.ok) throw new Error(parseError(text, "Falha ao criar rota.", resp.status));
+      if (!resp.ok) throw new Error(parseApiError(text, "Falha ao criar rota.", resp.status));
       const data = text ? JSON.parse(text) : {};
       if (data.success === false || data.status === "error") throw new Error(data.detail || data.error || "Erro ao criar rota.");
-      setSavingRouteId(data.id || data.rota_id || data?.rota_id || null);
+      const rotaCriadaIdRaw = data?.rota_id ?? data?.id ?? data?.data?.rota_id ?? data?.data?.id ?? null;
+      const rotaCriadaId = rotaCriadaIdRaw !== null && typeof rotaCriadaIdRaw !== "undefined"
+        ? Number(rotaCriadaIdRaw)
+        : null;
+      setSavingRouteId(Number.isFinite(rotaCriadaId ?? NaN) ? rotaCriadaId : null);
       const ordemHuman = pedidosOrdenados.join(" → ");
       const distanciaMsg =
         typeof distanciaOtimizada === "number" ? ` | Distância: ${distanciaOtimizada} km` : "";
@@ -321,8 +524,12 @@ export default function PedidosPage() {
           : `Rota otimizada criada (${algoritmo}).${distanciaMsg}`
       );
       setSelectedIds([]);
-      await loadPedidos(0);
-      setOffset(0);
+      await loadPedidos(0, true);
+      if (rotaCriadaId && Number.isFinite(rotaCriadaId)) {
+        router.push(`/rotas?rota=${rotaCriadaId}`);
+      } else {
+        router.push("/rotas");
+      }
     } catch (e: any) {
       setError(e.message || "Erro ao gerar rota.");
     } finally {
@@ -338,23 +545,19 @@ export default function PedidosPage() {
     try {
       const targetId = normalizeId(pedidoId);
       const newTotal = Math.max(0, totalCount - 1);
-      const adjustedOffset = offset >= newTotal && offset > 0 ? Math.max(0, offset - PAGE_SIZE) : offset;
       const resp = await fetch(`/api/proxy/pedidos/${pedidoId}`, {
         method: "DELETE",
         credentials: "include",
       });
       const text = await resp.text();
       if (!resp.ok) {
-        throw new Error(parseError(text, "Falha ao excluir pedido.", resp.status));
+        throw new Error(parseApiError(text, "Falha ao excluir pedido.", resp.status));
       }
       setPedidos((prev) => prev.filter((p) => normalizeId((p as any).id) !== targetId));
       setSelectedIds((prev) => prev.filter((id) => normalizeId(id) !== targetId));
       setTotalCount(newTotal);
       setInfo("Pedido excluído com sucesso.");
-      await loadPedidos(adjustedOffset);
-      if (adjustedOffset !== offset) {
-        setOffset(adjustedOffset);
-      }
+      await loadPedidos(0, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao excluir pedido.");
     } finally {
@@ -379,7 +582,7 @@ export default function PedidosPage() {
         </nav>
       </aside>
 
-      <main className={styles.content}>
+      <main className={`${styles.content} ${styles.ordersContent}`}>
         {loading && <LoadingOverlay message="Carregando pedidos..." />}
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
@@ -403,7 +606,14 @@ export default function PedidosPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-              <div className={styles.avatar}>{avatarLetter}</div>
+              <Link
+                href="/configuracoes"
+                className={styles.avatar}
+                aria-label="Ir para usuários"
+                title="Ir para usuários"
+              >
+                {avatarLetter}
+              </Link>
               <div className={styles.info}>
                 <strong>{displayName}</strong>
                 <small>Administrador</small>
@@ -420,7 +630,7 @@ export default function PedidosPage() {
           </div>
         </header>
 
-        <section className={styles.card} style={{ marginTop: 4, marginBottom: 4 }}>
+        <section className={styles.card} style={{ marginTop: 12 }}>
           <div className={styles["card-head"]}>
             <h3>Ponto de partida</h3>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -430,7 +640,7 @@ export default function PedidosPage() {
                 onClick={() => setDepositoCoords(defaultDeposito)}
                 disabled={optimizing}
               >
-                Usar padrao
+                Usar padrão
               </button>
               <button
                 type="button"
@@ -474,6 +684,30 @@ export default function PedidosPage() {
           </p>
         </section>
 
+        <OrdersTable
+          pedidos={displayedPedidos}
+          selectedIds={selectedIds}
+          onToggleSelect={(id, checked) =>
+            setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((p) => p !== id)))
+          }
+          onToggleSelectAll={(checked) => setSelectedIds(checked ? displayedPedidos.map((p) => p.id) : [])}
+          onEdit={(id) => router.push(`/entregas/${id}/editar`)}
+          onDelete={handleDelete}
+          deletingId={deletingId}
+          loading={loading}
+          formatDateBR={formatDateBR}
+          pagination={{
+            currentPage: displayPage,
+            totalPages,
+            totalCount: totalCount || sortedPedidos.length,
+            canPrev,
+            canNext,
+            loading: loading || loadingMore,
+            onPrev: () => handleChangePage(displayPage - 1),
+            onNext: () => handleChangePage(displayPage + 1),
+          }}
+        />
+
         {error && <p className={styles.muted}>{error}</p>}
         {!error && info && <p className={styles.muted}>{info}</p>}
         {savingRouteId && (
@@ -482,22 +716,74 @@ export default function PedidosPage() {
           </div>
         )}
 
-        <div className={styles.ordersGrid}>
-          <SelectedOrdersMap
-            pedidos={selectedOrders.map((p) => ({
-              id: p.id,
-              cliente: (p as any).cliente,
-              nf: p.nf,
-              cidade: p.cidade,
-              latitude: (p as any).latitude,
-              longitude: (p as any).longitude,
-              peso_total: p._pesoTotal,
-              volume_total: p._volumeTotal,
-            }))}
-          />
-
-          <section className={`${styles.card} ${styles.ordersPanel}`}>
+        {selectedOrders.length === 0 && (
+          <p className={styles.muted} style={{ marginTop: 12 }} ref={selectionSectionRef}>
+            Selecione um pedido para usar o raio.
+          </p>
+        )}
+        {selectedOrders.length > 0 && (
+          <section className={`${styles.card} ${styles.simpleCard}`} style={{ marginTop: 12 }} ref={selectionSectionRef}>
             <div className={styles["card-head"]}>
+              <div>
+                <h3>Pedidos próximos</h3>
+                <p className={styles.radiusHint}>
+                  Use um pedido base e informe o raio para encontrar notas nas proximidades.
+                </p>
+              </div>
+            </div>
+            <div className={styles.radiusRow}>
+              <label className={styles.radiusField}>
+                <span>Pedido base</span>
+                <select value={basePedidoId ?? ""} onChange={(e) => setBasePedidoId(Number(e.target.value) || null)}>
+                  {selectedOrders.map((pedido) => (
+                    <option value={pedido.id} key={pedido.id}>
+                      #{pedido.id} — {pedido.cliente ?? "Cliente"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={styles.radiusField}>
+                <span>Raio em km</span>
+                <select value={raioKm} onChange={(e) => setRaioKm(Number(e.target.value) || RAIO_OPTIONS[0])}>
+                  {RAIO_OPTIONS.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.primary} ${styles.sm} ${styles.radiusAction}`}
+                onClick={aplicarRaio}
+                disabled={aplicandoRaio}
+              >
+                {aplicandoRaio ? "Buscando..." : "Aplicar raio"}
+              </button>
+            </div>
+            {raioErro && <small className={styles.muted}>{raioErro}</small>}
+            {!raioErro && raioInfo && <small className={styles.muted}>{raioInfo}</small>}
+          </section>
+        )}
+
+        <div className={`${styles.ordersGrid} ${styles.ordersGridResponsive}`}>
+          <div className={styles.mapWrapper}>
+            <SelectedOrdersMap
+              pedidos={selectedOrders.map((p) => ({
+                id: p.id,
+                cliente: (p as any).cliente,
+                nf: p.nf,
+                cidade: p.cidade,
+                latitude: (p as any).latitude,
+                longitude: (p as any).longitude,
+                peso_total: p._pesoTotal,
+                volume_total: p._volumeTotal,
+              }))}
+            />
+          </div>
+
+          <section className={`${styles.card} ${styles.summaryCard}`}>
+            <div className={`${styles["card-head"]} ${styles.summaryHead}`}>
               <h3>Resumo dos selecionados</h3>
               <span className={styles.muted}>
                 {selectedOrders.length > 0 ? `${selectedOrders.length} pedido(s)` : "Nenhum pedido selecionado"}
@@ -530,7 +816,7 @@ export default function PedidosPage() {
                       <span>
                         Status:{" "}
                         {p.rota !== null && typeof p.rota !== "undefined" ? (
-                          <span className={`${styles.badge} ${styles.ok}`}>Rota gerada</span>
+                          <span className={`${styles.badge} ${styles.done}`}>Rota gerada</span>
                         ) : (
                           <span className={`${styles.badge} ${styles.warn}`}>Pendente</span>
                         )}
@@ -538,50 +824,19 @@ export default function PedidosPage() {
                     </div>
                   </div>
                 ))}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.primary} ${styles.sm}`}
+                    onClick={handleOptimize}
+                    disabled={optimizing || selectedOrders.length === 0}
+                  >
+                    {optimizing ? "Gerando..." : "Gerar rota"}
+                  </button>
+                </div>
               </div>
             )}
           </section>
-        </div>
-
-        <OrdersTable
-          pedidos={pedidosWithTotals}
-          selectedIds={selectedIds}
-          onToggleSelect={(id, checked) =>
-            setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((p) => p !== id)))
-          }
-          onToggleSelectAll={(checked) => setSelectedIds(checked ? pedidosWithTotals.map((p) => p.id) : [])}
-          onEdit={(id) => router.push(`/entregas/${id}/editar`)}
-          onDelete={handleDelete}
-          deletingId={deletingId}
-          loading={loading}
-          formatDateBR={formatDateBR}
-        />
-
-        <div
-          className={styles["quick-actions"]}
-          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}
-        >
-          <span className={styles.muted}>
-            Página {currentPage} de {totalPages} ({totalCount} registros)
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-              disabled={!canPrev || loading}
-              onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-              disabled={!canNext || loading}
-              onClick={() => setOffset(offset + PAGE_SIZE)}
-            >
-              Próxima
-            </button>
-          </div>
         </div>
       </main>
     </div>

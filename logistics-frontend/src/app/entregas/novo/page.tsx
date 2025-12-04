@@ -9,6 +9,7 @@ import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import dynamic from "next/dynamic";
 import styles from "../../inicio/styles.module.css";
+import { extractMessage, parseApiError } from "@/lib/apiError";
 
 // Importa o componente do mapa dinamicamente (client-side only)
 const MapLocationPicker = dynamic(
@@ -19,25 +20,6 @@ const MapLocationPicker = dynamic(
 const inter = InterFont({ subsets: ["latin"] });
 
 type PedidoItem = { produtoId: string; quantidade: string };
-
-const parseError = (raw: string, fallback: string, status?: number) => {
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed?.detail) return parsed.detail as string;
-    const first = parsed && Object.keys(parsed)[0];
-    if (first) {
-      const value = parsed[first];
-      if (Array.isArray(value)) return String(value[0]);
-      if (typeof value === "string") return value;
-    }
-  } catch {
-    if (raw.trim().startsWith("<")) {
-      return `${fallback} (status ${status ?? "desconhecido"}). Verifique logs.`;
-    }
-  }
-  return raw || fallback;
-};
 
 export default function NovoPedidoPage() {
   const router = useRouter();
@@ -75,7 +57,7 @@ export default function NovoPedidoPage() {
       try {
         const resp = await fetch("/api/proxy/produtos", { cache: "no-store" });
         const raw = await resp.text();
-        if (!resp.ok) throw new Error(parseError(raw, "Falha ao carregar produtos.", resp.status));
+        if (!resp.ok) throw new Error(parseApiError(raw, "Falha ao carregar produtos.", resp.status));
         const data = JSON.parse(raw) as API<APIGetProdutosResponse>;
         if (!data.success) throw new Error(data.detail || "Erro ao buscar produtos.");
         if (!active) return;
@@ -166,13 +148,17 @@ export default function NovoPedidoPage() {
       });
       const text = await resp.text();
       if (!resp.ok) {
-        throw new Error(parseError(text, "Falha ao cadastrar pedido.", resp.status));
+        throw new Error(parseApiError(text, "Falha ao cadastrar pedido.", resp.status));
       }
       if (text) {
         try {
           const parsed = JSON.parse(text) as API<unknown>;
           if (typeof parsed.success === "boolean" && !parsed.success) {
-            throw new Error(parsed.detail || "Falha ao cadastrar pedido.");
+            const friendly =
+              extractMessage((parsed as any).detail) ??
+              extractMessage((parsed as any).data) ??
+              "Falha ao cadastrar pedido.";
+            throw new Error(friendly);
           }
         } catch {
           /* se não for JSON, apenas segue adiante */
@@ -210,7 +196,14 @@ export default function NovoPedidoPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-            <div className={styles.avatar}>{avatarLetter}</div>
+            <Link
+              href="/configuracoes"
+              className={styles.avatar}
+              aria-label="Ir para usuários"
+              title="Ir para usuários"
+            >
+              {avatarLetter}
+            </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
               <small>Administrador</small>

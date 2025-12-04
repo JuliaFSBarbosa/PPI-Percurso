@@ -1,32 +1,17 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, ChangeEvent, FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import styles from "../inicio/styles.module.css";
 import RouteMapViewer from "@/components/RouteMapViewer";
+import { parseApiError } from "@/lib/apiError";
+import { statusLabels } from "@/constants/labels";
 const inter = InterFont({ subsets: ["latin"] });
 const defaultDeposito = { latitude: -27.3586, longitude: -53.3958 };
-const parseError = (raw: string, fallback: string, status?: number) => {
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed?.detail) return parsed.detail as string;
-    const first = parsed && Object.keys(parsed)[0];
-    if (first) {
-      const value = parsed[first];
-      if (Array.isArray(value)) return String(value[0]);
-      if (typeof value === "string") return value;
-    }
-  } catch {
-    if (raw.trim().startsWith("<")) {
-      return `${fallback} (status ${status ?? "desconhecido"}).`;
-    }
-  }
-  return raw || fallback;
-};
 const decimalFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -47,9 +32,9 @@ const formatPercent = (value?: number) => {
 const statusBadge = (status: RotaStatus) => {
   switch (status) {
     case "PLANEJADA":
-      return `${styles.badge} ${styles.warn}`;
+      return `${styles.badge} ${styles.late}`;
     case "EM_EXECUCAO":
-      return `${styles.badge} ${styles.ok}`;
+      return `${styles.badge} ${styles.statusInfo}`;
     case "CONCLUIDA":
       return `${styles.badge} ${styles.done}`;
     default:
@@ -79,6 +64,8 @@ const buildMapsLink = (
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 };
 export default function RotasPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const { data: session } = useSession();
   const [rotas, setRotas] = useState<Rota[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,6 +80,12 @@ export default function RotasPage() {
   const [snapshotCoords, setSnapshotCoords] = useState<{ latitude: number; longitude: number; label?: string }[] | null>(
     null
   );
+  const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+  const [editingRota, setEditingRota] = useState<{ id: number; data_rota: string; capacidade_max: number } | null>(null);
+  const [editingErrors, setEditingErrors] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingRotaId, setDeletingRotaId] = useState<number | null>(null);
   const snapshotRef = useRef<HTMLDivElement | null>(null);
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const ensureHtml2Canvas = async () => {
@@ -131,7 +124,7 @@ export default function RotasPage() {
       try {
         const resp = await fetch("/api/proxy/rotas?limit=500", { cache: "no-store" });
         const raw = await resp.text();
-        if (!resp.ok) throw new Error(parseError(raw, "Não foi possível carregar as rotas.", resp.status));
+        if (!resp.ok) throw new Error(parseApiError(raw, "Não foi possível carregar as rotas.", resp.status));
         const data = JSON.parse(raw) as API<APIGetRotasResponse>;
         if (!data.success) throw new Error(data.detail || "Erro ao buscar rotas.");
         if (!active) return;
@@ -203,6 +196,101 @@ export default function RotasPage() {
     setOptimizedCoords((prev) => ({ ...prev, [rotaId]: coords }));
     return coords;
   };
+
+  const abrirEdicao = async (rotaId: number) => {
+    let rotaInfo = rotas.find((r) => r.id === rotaId);
+    if (!rotaInfo) {
+      rotaInfo = await fetchRotaDetail(rotaId);
+    }
+    if (!rotaInfo) return;
+    const data = rotaInfo.data_rota || rotaInfo.created_at || new Date().toISOString();
+    const dataIso = data.slice(0, 10);
+    setEditingErrors(null);
+    setEditingRota({ id: rotaInfo.id, data_rota: dataIso, capacidade_max: Number(rotaInfo.capacidade_max) || 0 });
+  };
+
+  const salvarEdicao = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editingRota) return;
+    setSavingEdit(true);
+    setEditingErrors(null);
+    try {
+      const rotaOriginal = rotas.find((r) => r.id === editingRota.id);
+      const resp = await fetch(`/api/proxy/rotas/${editingRota.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data_rota: editingRota.data_rota,
+          capacidade_max: editingRota.capacidade_max,
+          status: rotaOriginal?.status ?? "PLANEJADA",
+        }),
+      });
+      const raw = await resp.text();
+      if (!resp.ok) throw new Error(parseApiError(raw, "Falha ao atualizar rota.", resp.status));
+      const data = JSON.parse(raw) as API<APIGetRotaResponse>;
+      if (!data.success || !data.data) throw new Error(data.detail || "Erro ao atualizar rota.");
+      setRotas((prev) => prev.map((rota) => (rota.id === data.data!.id ? { ...rota, ...data.data! } : rota)));
+      setRotaDetails((prev) => ({ ...prev, [data.data!.id]: data.data as Rota }));
+      setStatusFeedback(`Rota #${data.data!.id} atualizada.`);
+      setEditingRota(null);
+    } catch (err) {
+      setEditingErrors(err instanceof Error ? err.message : "Não foi possível salvar a rota.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const excluirRota = async (rotaId: number) => {
+    if (!confirm(`Deseja excluir a rota #${rotaId}?`)) return;
+    setDeletingRotaId(rotaId);
+    setStatusFeedback(null);
+    try {
+      const resp = await fetch(`/api/proxy/rotas/${rotaId}`, {
+        method: "DELETE",
+      });
+      const raw = await resp.text();
+      if (!resp.ok) throw new Error(parseApiError(raw, "Erro ao excluir rota.", resp.status));
+      setRotas((prev) => prev.filter((rota) => rota.id !== rotaId));
+      setStatusFeedback(`Rota #${rotaId} excluída.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível excluir a rota.");
+    } finally {
+      setDeletingRotaId(null);
+    }
+  };
+
+  const rotaParam = searchParams?.get("rota");
+  useEffect(() => {
+    if (rotaParam) {
+      const numero = Number(rotaParam);
+      setStatusFeedback(
+        Number.isFinite(numero) ? `Rota #${numero} criada com sucesso.` : `Nova rota criada: ${rotaParam}.`
+      );
+    }
+  }, [rotaParam]);
+
+  const atualizarStatusRota = async (rotaId: number, novoStatus: RotaStatus) => {
+    setStatusUpdatingId(rotaId);
+    setStatusFeedback(null);
+    try {
+      const resp = await fetch(`/api/proxy/rotas/${rotaId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: novoStatus }),
+      });
+      const raw = await resp.text();
+      if (!resp.ok) throw new Error(parseApiError(raw, "Não foi possível atualizar o status da rota.", resp.status));
+      const data = JSON.parse(raw) as API<APIGetRotaResponse>;
+      if (!data.success || !data.data) throw new Error(data.detail || "Erro ao atualizar status da rota.");
+      setRotas((prev) => prev.map((rota) => (rota.id === rotaId ? { ...rota, ...data.data } : rota)));
+      setRotaDetails((prev) => ({ ...prev, [rotaId]: data.data as Rota }));
+      setStatusFeedback(`Rota #${rotaId} marcada como ${statusLabels[data.data.status] ?? data.data.status}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao atualizar status da rota.");
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
       <aside className={styles.sidebar}>
@@ -226,6 +314,13 @@ export default function RotasPage() {
             <div className={styles.pageActions}>
               <button
                 type="button"
+                className={`${styles.btn} ${styles.ghost}`}
+                onClick={() => router.push("/pedidos")}
+              >
+                Selecionar pedidos
+              </button>
+              <button
+                type="button"
                 className={`${styles.btn} ${styles.primary}`}
                 onClick={() => setReloadKey((prev) => prev + 1)}
                 disabled={loading}
@@ -236,7 +331,14 @@ export default function RotasPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-            <div className={styles.avatar}>{avatarLetter}</div>
+            <Link
+              href="/configuracoes"
+              className={styles.avatar}
+              aria-label="Ir para usuários"
+              title="Ir para usuários"
+            >
+              {avatarLetter}
+            </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
               <small>Administrador</small>
@@ -258,6 +360,7 @@ export default function RotasPage() {
             <h3>Rotas cadastradas</h3>
           </div>
           {error && <p className={styles.muted}>{error}</p>}
+          {!error && statusFeedback && <p className={styles.muted}>{statusFeedback}</p>}
           <table>
             <thead>
               <tr>
@@ -265,20 +368,22 @@ export default function RotasPage() {
                 <th>Data</th>
                 <th>Total pedidos</th>
                 <th>Peso total</th>
+                <th>Status</th>
                 <th>Mapa</th>
-                <th>Relatorio</th>
+                <th>Relatório</th>
                 <th>Pedidos</th>
+                <th>Gerenciar</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7}>Carregando rotas...</td>
+                  <td colSpan={9}>Carregando rotas...</td>
                 </tr>
               )}
               {!loading && rotas.length === 0 && (
                 <tr>
-                  <td colSpan={7}>Nenhuma rota cadastrada.</td>
+                  <td colSpan={9}>Nenhuma rota cadastrada.</td>
                 </tr>
               )}
               {!loading &&
@@ -289,7 +394,32 @@ export default function RotasPage() {
                     <td>{rota.total_pedidos ?? rota.pedidos?.length ?? 0}</td>
                     <td>{formatWeight(rota.peso_total_pedidos)}</td>
                     <td>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <span className={statusBadge(rota.status)}>{statusLabels[rota.status] ?? rota.status}</span>
+                        {rota.status === "PLANEJADA" && (
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                            onClick={() => atualizarStatusRota(rota.id, "EM_EXECUCAO")}
+                            disabled={statusUpdatingId === rota.id}
+                          >
+                            {statusUpdatingId === rota.id ? "Atualizando..." : "Iniciar rota"}
+                          </button>
+                        )}
+                        {rota.status === "EM_EXECUCAO" && (
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                            onClick={() => atualizarStatusRota(rota.id, "CONCLUIDA")}
+                            disabled={statusUpdatingId === rota.id}
+                          >
+                            {statusUpdatingId === rota.id ? "Atualizando..." : "Finalizar rota"}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className={`${styles.actionsRow} ${styles.actionsInline}`}>
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
@@ -316,10 +446,11 @@ export default function RotasPage() {
                       </div>
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-                        onClick={async () => {
+                      <div className={`${styles.actionsRow} ${styles.actionsInline}`}>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                          onClick={async () => {
                           setLoadingPdfId(rota.id);
                           try {
                             let det = rotaDetails[rota.id] || (await fetchRotaDetail(rota.id));
@@ -345,7 +476,7 @@ export default function RotasPage() {
                             const contentType = resp.headers.get("content-type") || "";
                             if (!resp.ok || !contentType.includes("pdf")) {
                               const raw = await resp.text();
-                              throw new Error(parseError(raw, "Falha ao gerar PDF da rota.", resp.status));
+                              throw new Error(parseApiError(raw, "Falha ao gerar PDF da rota.", resp.status));
                             }
                             const blob = await resp.blob();
                             const url = URL.createObjectURL(blob);
@@ -362,16 +493,18 @@ export default function RotasPage() {
                             setLoadingPdfId(null);
                           }
                         }}
-                        disabled={loadingPdfId === rota.id}
-                      >
-                        {loadingPdfId === rota.id ? "Gerando..." : "Baixar PDF"}
-                      </button>
+                          disabled={loadingPdfId === rota.id}
+                        >
+                          {loadingPdfId === rota.id ? "Gerando..." : "Baixar PDF"}
+                        </button>
+                      </div>
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-                        onClick={() => {
+                      <div className={`${styles.actionsRow} ${styles.actionsInline}`}>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                          onClick={() => {
                           setLoadingPedidosId(rota.id);
                           const run = async () => {
                             try {
@@ -388,10 +521,30 @@ export default function RotasPage() {
                           };
                           run();
                         }}
-                        disabled={loadingPedidosId === rota.id}
-                      >
-                        {loadingPedidosId === rota.id ? "Carregando..." : "Visualizar pedidos"}
-                      </button>
+                          disabled={loadingPedidosId === rota.id}
+                        >
+                          {loadingPedidosId === rota.id ? "Carregando..." : "Visualizar pedidos"}
+                        </button>
+                      </div>
+                    </td>
+                    <td>
+                      <div className={styles.actionsRow}>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                          onClick={() => abrirEdicao(rota.id)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                          onClick={() => excluirRota(rota.id)}
+                          disabled={deletingRotaId === rota.id}
+                        >
+                          {deletingRotaId === rota.id ? "Excluindo..." : "Excluir"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -447,6 +600,84 @@ export default function RotasPage() {
                   </ul>
                 )}
               </div>
+            </div>
+          )}
+          {editingRota && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.55)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 2100,
+              }}
+              onClick={() => !savingEdit && setEditingRota(null)}
+            >
+              <form
+                onSubmit={salvarEdicao}
+                className={styles.card}
+                style={{ maxWidth: 420, width: "92%", display: "flex", flexDirection: "column", gap: 12 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className={styles["card-head"]}>
+                  <strong>Editar rota #{editingRota.id}</strong>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                    onClick={() => setEditingRota(null)}
+                    disabled={savingEdit}
+                  >
+                    Fechar
+                  </button>
+                </div>
+                {editingErrors && <p className={styles.muted}>{editingErrors}</p>}
+                <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span>Data da rota</span>
+                  <input
+                    type="date"
+                    value={editingRota.data_rota}
+                    onChange={(e) =>
+                      setEditingRota((prev) => (prev ? { ...prev, data_rota: e.target.value } : prev))
+                    }
+                    className={styles.input}
+                    required
+                  />
+                </label>
+                <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span>Capacidade máxima</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingRota.capacidade_max}
+                    onChange={(e) =>
+                      setEditingRota((prev) =>
+                        prev ? { ...prev, capacidade_max: Number(e.target.value) || 0 } : prev
+                      )
+                    }
+                    className={styles.input}
+                    required
+                  />
+                </label>
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                    onClick={() => setEditingRota(null)}
+                    disabled={savingEdit}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className={`${styles.btn} ${styles.primary} ${styles.sm}`}
+                    disabled={savingEdit}
+                  >
+                    {savingEdit ? "Salvando..." : "Salvar alterações"}
+                  </button>
+                </div>
+              </form>
             </div>
           )}
         </section>

@@ -56,6 +56,11 @@ type Pedido = {
     peso_total: number;
     volume_total: number;
     total_itens: number;
+    rotas?: {
+        id: number;
+        status: RotaStatus;
+        data_rota: string;
+    }[];
 }
 
 type PedidoSimple = {
@@ -147,3 +152,14 @@ type APIGetRotasResponse = {
     next: string | null;
     previous: string | null;
 }
+
+type DashboardResumo = {
+    data_referencia: string;
+    total_pedidos: number;
+    pedidos_pendentes: number;
+    rotas_geradas: number;
+    rotas_em_execucao: number;
+    rotas_finalizadas: number;
+}
+
+type APIGetDashboardResumoResponse = DashboardResumo;

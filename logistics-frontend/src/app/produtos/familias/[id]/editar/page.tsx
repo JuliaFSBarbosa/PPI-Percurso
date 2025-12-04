@@ -7,27 +7,10 @@ import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../../../../inicio/styles.module.css";
+import { parseApiError } from "@/lib/apiError";
 
 const inter = InterFont({ subsets: ["latin"] });
 
-const parseError = (raw: string, fallback: string, status?: number) => {
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed?.detail) return parsed.detail as string;
-    const first = parsed && Object.keys(parsed)[0];
-    if (first) {
-      const value = parsed[first];
-      if (Array.isArray(value)) return String(value[0]);
-      if (typeof value === "string") return value;
-    }
-  } catch {
-    if (raw.trim().startsWith("<")) {
-      return `${fallback} (status ${status ?? "desconhecido"}). Confira os logs do backend.`;
-    }
-  }
-  return raw || fallback;
-};
 
 export default function EditarFamiliaPage() {
   const router = useRouter();
@@ -58,7 +41,7 @@ export default function EditarFamiliaPage() {
       try {
         const resp = await fetch(`/api/proxy/familias/${id}`);
         const raw = await resp.text();
-        if (!resp.ok) throw new Error(parseError(raw, "Falha ao carregar familia.", resp.status));
+        if (!resp.ok) throw new Error(parseApiError(raw, "Falha ao carregar familia.", resp.status));
         const json = JSON.parse(raw) as Familia | API<APIGetFamiliaResponse>;
         let familia: Familia | null = null;
         if (typeof (json as API<APIGetFamiliaResponse>).success === "boolean") {
@@ -113,7 +96,7 @@ export default function EditarFamiliaPage() {
       });
       if (!resp.ok) {
         const text = await resp.text();
-        throw new Error(parseError(text, "Falha ao atualizar familia.", resp.status));
+        throw new Error(parseApiError(text, "Falha ao atualizar familia.", resp.status));
       }
       setMessage("Familia atualizada com sucesso.");
       setTimeout(() => router.push("/produtos"), 1200);
@@ -147,7 +130,14 @@ export default function EditarFamiliaPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-            <div className={styles.avatar}>{avatarLetter}</div>
+            <Link
+              href="/configuracoes"
+              className={styles.avatar}
+              aria-label="Ir para usuários"
+              title="Ir para usuários"
+            >
+              {avatarLetter}
+            </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
               <small>Administrador</small>
@@ -217,4 +207,3 @@ export default function EditarFamiliaPage() {
     </div>
   );
 }
-

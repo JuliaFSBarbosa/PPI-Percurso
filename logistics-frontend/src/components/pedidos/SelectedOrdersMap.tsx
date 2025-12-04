@@ -54,9 +54,15 @@ const ensureLeaflet = async () => {
 
 export function SelectedOrdersMap({ pedidos }: Props) {
   const mapRef = useRef<HTMLDivElement | null>(null);
+  const leafletMapRef = useRef<any>(null);
 
   useEffect(() => {
     if (!mapRef.current) return;
+
+    if (leafletMapRef.current) {
+      leafletMapRef.current.remove();
+      leafletMapRef.current = null;
+    }
 
     const points = pedidos
       .map((p) => {
@@ -72,8 +78,6 @@ export function SelectedOrdersMap({ pedidos }: Props) {
       return;
     }
 
-    let map: any;
-
     const init = async () => {
       const L = await ensureLeaflet();
       if (!L || !mapRef.current) return;
@@ -88,7 +92,13 @@ export function SelectedOrdersMap({ pedidos }: Props) {
         });
       }
 
-      map = L.map(mapRef.current).setView([points[0].latitude, points[0].longitude], 12);
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+
+      const map = L.map(mapRef.current).setView([points[0].latitude, points[0].longitude], 12);
+      leafletMapRef.current = map;
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap",
@@ -119,7 +129,10 @@ export function SelectedOrdersMap({ pedidos }: Props) {
     init();
 
     return () => {
-      if (map) map.remove();
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
     };
   }, [pedidos]);
 

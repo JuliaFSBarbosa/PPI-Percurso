@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { SelectedOrdersMap } from "@/components/pedidos/SelectedOrdersMap";
+import { statusLabels } from "@/constants/labels";
 import styles from "./styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
@@ -41,9 +42,10 @@ const formatDateBR = (value: any) => {
 };
 
 type KPIState = {
-  pedidosHoje: number;
-  disponiveisRota: number;
-  rotasGeradasHoje: number;
+  pedidosParaEntrega: number;
+  rotasGeradas: number;
+  rotasEmExecucao: number;
+  rotasFinalizadas: number;
 };
 
 export default function InicioPage() {
@@ -52,10 +54,12 @@ export default function InicioPage() {
 
   const [pedidosHoje, setPedidosHoje] = useState<Pedido[]>([]);
   const [kpis, setKpis] = useState<KPIState>({
-    pedidosHoje: 0,
-    disponiveisRota: 0,
-    rotasGeradasHoje: 0,
+    pedidosParaEntrega: 0,
+    rotasGeradas: 0,
+    rotasEmExecucao: 0,
+    rotasFinalizadas: 0,
   });
+  const [dataFiltro, setDataFiltro] = useState(todayLocalISO());
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -69,8 +73,8 @@ export default function InicioPage() {
     [displayName]
   );
 
-  useEffect(() => {
-    const hoje = todayLocalISO();
+  const carregarDados = useCallback(async () => {
+    const dataConsulta = dataFiltro || todayLocalISO();
 
     const fetchJson = async <T,>(url: string, fallbackError: string): Promise<T> => {
       const resp = await fetch(url, { cache: "no-store" });
@@ -81,46 +85,39 @@ export default function InicioPage() {
       return data.data as T;
     };
 
-    const load = async () => {
-      setLoading(true);
-      setErro(null);
-      try {
-        // Puxamos um lote generoso e filtramos no client para garantir coerência
-        const [pedidosResp, rotasHojeResp] = await Promise.all([
-          fetchJson<APIGetPedidosResponse>("/api/proxy/pedidos?limit=500", "Falha ao carregar pedidos."),
-          fetchJson<APIGetRotasResponse>(
-            `/api/proxy/rotas?data_inicio=${hoje}&data_fim=${hoje}&limit=500`,
-            "Falha ao carregar rotas do dia."
-          ),
-        ]);
+    setLoading(true);
+    setErro(null);
+    try {
+      const [pedidosResp, resumoResp] = await Promise.all([
+        fetchJson<APIGetPedidosResponse>("/api/proxy/pedidos?limit=500", "Falha ao carregar pedidos."),
+        fetchJson<APIGetDashboardResumoResponse>(
+          `/api/proxy/dashboard/resumo?data=${dataConsulta}`,
+          "Falha ao carregar indicadores."
+        ),
+      ]);
 
-        const pedidosLista = pedidosResp?.results ?? [];
-        const pedidosHojeLista = pedidosLista.filter((p: any) => normalizeDateToISO(p.dtpedido) === hoje);
+      const pedidosLista = pedidosResp?.results ?? [];
+      const pedidosDia = pedidosLista.filter((p: any) => normalizeDateToISO(p.dtpedido) === dataConsulta);
 
-        // Conteúdo real
-        const pedidosDisponiveis = pedidosLista.filter((p: any) => {
-          const rotas = Array.isArray((p as any).rotas) ? (p as any).rotas : [];
-          return rotas.length === 0;
-        });
-        const rotasHoje = rotasHojeResp?.results ?? [];
+      setPedidosHoje(pedidosDia as Pedido[]);
+      setKpis({
+        pedidosParaEntrega: resumoResp?.pedidos_pendentes ?? 0,
+        rotasGeradas: resumoResp?.rotas_geradas ?? 0,
+        rotasEmExecucao: resumoResp?.rotas_em_execucao ?? 0,
+        rotasFinalizadas: resumoResp?.rotas_finalizadas ?? 0,
+      });
+    } catch (e: any) {
+      setErro(e.message || "Não foi possível carregar os dados iniciais.");
+      setPedidosHoje([]);
+      setKpis({ pedidosParaEntrega: 0, rotasGeradas: 0, rotasEmExecucao: 0, rotasFinalizadas: 0 });
+    } finally {
+      setLoading(false);
+    }
+  }, [dataFiltro]);
 
-        setPedidosHoje(pedidosHojeLista as Pedido[]);
-        setKpis({
-          pedidosHoje: pedidosHojeLista.length,
-          disponiveisRota: pedidosDisponiveis.length,
-          rotasGeradasHoje: rotasHojeResp?.count ?? rotasHoje.length,
-        });
-      } catch (e: any) {
-        setErro(e.message || "Não foi possível carregar os dados iniciais.");
-        setPedidosHoje([]);
-        setKpis({ pedidosHoje: 0, disponiveisRota: 0, rotasGeradasHoje: 0 });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, []);
+  useEffect(() => {
+    carregarDados();
+  }, [carregarDados]);
 
   const totalItens = (pedido: Pedido) =>
     (pedido as any)._totalItens ??
@@ -130,6 +127,32 @@ export default function InicioPage() {
           0
         )
       : 0);
+
+  const statusInfoPedido = (pedido: Pedido) => {
+    const rotasAssociadas = Array.isArray((pedido as any).rotas) ? (pedido as any).rotas : [];
+    let badgeClass = `${styles.badge} ${styles.warn}`;
+    let badgeText = "Pendente";
+
+    if (rotasAssociadas.length > 0) {
+      const todasConcluidas = rotasAssociadas.every((rota) => rota.status === "CONCLUIDA");
+      const algumaExecucao = rotasAssociadas.some((rota) => rota.status === "EM_EXECUCAO");
+      if (todasConcluidas) {
+        badgeClass = `${styles.badge} ${styles.done}`;
+        badgeText = statusLabels.CONCLUIDA;
+      } else if (algumaExecucao) {
+        badgeClass = `${styles.badge} ${styles.statusInfo}`;
+        badgeText = statusLabels.EM_EXECUCAO;
+      } else {
+        badgeClass = `${styles.badge} ${styles.late}`;
+        badgeText = statusLabels.PLANEJADA;
+      }
+    } else if (typeof (pedido as any).rota !== "undefined" && (pedido as any).rota !== null) {
+      badgeClass = `${styles.badge} ${styles.done}`;
+      badgeText = "Rota vinculada";
+    }
+
+    return { badgeClass, badgeText };
+  };
 
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
@@ -171,7 +194,14 @@ export default function InicioPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-              <div className={styles.avatar}>{avatarLetter}</div>
+              <Link
+                href="/configuracoes"
+                className={styles.avatar}
+                aria-label="Ir para usuários"
+                title="Ir para usuários"
+              >
+                {avatarLetter}
+              </Link>
               <div className={styles.info}>
                 <strong>{displayName}</strong>
                 <small>Administrador</small>
@@ -190,25 +220,53 @@ export default function InicioPage() {
           </div>
         </header>
 
+        <div className={styles.filtersRow}>
+          <label className={styles.dateField}>
+            <span>Data do dia</span>
+            <input
+              id="data-filtro"
+              type="date"
+              value={dataFiltro}
+              onChange={(e) => setDataFiltro(e.target.value)}
+              className={styles.dateInput}
+            />
+          </label>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.primary}`}
+            onClick={carregarDados}
+            disabled={loading}
+          >
+            {loading ? "Atualizando..." : "Atualizar mural"}
+          </button>
+        </div>
+
         <section className={styles.kpis}>
           <div className={`${styles.card} ${styles.kpi}`}>
-            <h3>Pedidos hoje</h3>
-            <div className={styles.value}>{kpis.pedidosHoje}</div>
+            <h3>Pedidos a serem entregues</h3>
+            <div className={styles.value}>{kpis.pedidosParaEntrega}</div>
           </div>
           <div className={`${styles.card} ${styles.kpi}`}>
-            <h3>Pedidos sem rota</h3>
-            <div className={styles.value}>{kpis.disponiveisRota}</div>
+            <h3>Rotas geradas</h3>
+            <div className={styles.value}>{kpis.rotasGeradas}</div>
           </div>
           <div className={`${styles.card} ${styles.kpi}`}>
-            <h3>Rotas geradas hoje</h3>
-            <div className={styles.value}>{kpis.rotasGeradasHoje}</div>
+            <h3>Rotas em andamento</h3>
+            <div className={styles.value}>{kpis.rotasEmExecucao}</div>
+          </div>
+          <div className={`${styles.card} ${styles.kpi}`}>
+            <h3>Rotas finalizadas</h3>
+            <div className={styles.value}>{kpis.rotasFinalizadas}</div>
           </div>
         </section>
 
         <section className={styles.grid}>
           <div className={`${styles.card} ${styles.table}`}>
             <div className={styles["card-head"]}>
-              <h3>Pedidos de hoje</h3>
+              <div>
+                <h3>Pedidos do dia {formatDateBR(dataFiltro)}</h3>
+                <small>{pedidosHoje.length} pedido(s) encontrados</small>
+              </div>
               <Link className={`${styles.btn} ${styles.ghost} ${styles.sm}`} href="/pedidos">
                 Ver pedidos
               </Link>
@@ -229,22 +287,21 @@ export default function InicioPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pedidosHoje.map((p) => (
-                    <tr key={p.id}>
-                      <td>{p.id}</td>
-                      <td>{p.nf}</td>
-                      <td>{(p as any).cliente ?? "-"}</td>
-                      <td>{formatDateBR(p.dtpedido)}</td>
-                      <td>{totalItens(p)}</td>
-                      <td>
-                        {Array.isArray((p as any).rotas) && (p as any).rotas.length > 0 ? (
-                          <span className={`${styles.badge} ${styles.ok}`}>Rota gerada</span>
-                        ) : (
-                          <span className={`${styles.badge} ${styles.warn}`}>Pendente</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {pedidosHoje.map((p) => {
+                    const { badgeClass, badgeText } = statusInfoPedido(p);
+                    return (
+                      <tr key={p.id}>
+                        <td>{p.id}</td>
+                        <td>{p.nf}</td>
+                        <td>{(p as any).cliente ?? "-"}</td>
+                        <td>{formatDateBR(p.dtpedido)}</td>
+                        <td>{totalItens(p)}</td>
+                        <td>
+                          <span className={badgeClass}>{badgeText}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

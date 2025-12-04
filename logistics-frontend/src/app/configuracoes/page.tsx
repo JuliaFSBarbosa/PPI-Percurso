@@ -8,6 +8,7 @@ import { useSession, signOut } from "next-auth/react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../inicio/styles.module.css";
+import { parseApiError } from "@/lib/apiError";
 
 const inter = InterFont({ subsets: ["latin"] });
 
@@ -20,24 +21,6 @@ type AdminUser = {
   is_superuser?: boolean;
 };
 
-const parseError = (raw: string, fallback: string, status?: number) => {
-  if (!raw) return fallback;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed?.detail) return parsed.detail as string;
-    const first = parsed && Object.keys(parsed)[0];
-    if (first) {
-      const value = (parsed as any)[first];
-      if (Array.isArray(value)) return String(value[0]);
-      if (typeof value === "string") return value;
-    }
-  } catch {
-    if (raw.trim().startsWith("<")) {
-      return `${fallback} (status ${status ?? "desconhecido"}).`;
-    }
-  }
-  return raw || fallback;
-};
 
 export default function UsuariosPage() {
   const router = useRouter();
@@ -66,7 +49,7 @@ export default function UsuariosPage() {
       try {
         const resp = await fetch("/api/proxy/usuarios", { cache: "no-store", credentials: "include" });
         const raw = await resp.text();
-        if (!resp.ok) throw new Error(parseError(raw, "Não foi possível carregar os usuários.", resp.status));
+        if (!resp.ok) throw new Error(parseApiError(raw, "Não foi possível carregar os usuários.", resp.status));
         const parsed = raw ? JSON.parse(raw) : [];
         let list: AdminUser[] = [];
         if (Array.isArray(parsed)) list = parsed;
@@ -121,7 +104,14 @@ export default function UsuariosPage() {
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
-            <div className={styles.avatar}>{avatarLetter}</div>
+            <Link
+              href="/configuracoes"
+              className={styles.avatar}
+              aria-label="Ir para usuários"
+              title="Ir para usuários"
+            >
+              {avatarLetter}
+            </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
               <small>Administrador</small>
@@ -175,7 +165,7 @@ export default function UsuariosPage() {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <div className={`${styles.actionsRow} ${styles.actionsInline}`}>
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
@@ -207,7 +197,7 @@ export default function UsuariosPage() {
                               });
                               const text = await resp.text();
                               if (!resp.ok) {
-                                throw new Error(parseError(text, "Falha ao excluir usuário.", resp.status));
+                                throw new Error(parseApiError(text, "Falha ao excluir usuário.", resp.status));
                               }
                               let successMsg = "Usuário excluído com sucesso.";
                               try {

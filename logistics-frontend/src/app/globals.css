@@ -1,169 +1,189 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+
 @theme {
-  --color-background: hsl(0 0% 100%);
-  --color-foreground: hsl(222.2 84% 4.9%);
-  --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(222.2 84% 4.9%);
-  --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(222.2 84% 4.9%);
-  --color-primary: hsl(221.2 83.2% 53.3%);
-  --color-primary-foreground: hsl(210 40% 98%);
-  --color-secondary: hsl(210 40% 96%);
-  --color-secondary-foreground: hsl(222.2 84% 4.9%);
-  --color-muted: hsl(210 40% 96%);
-  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
-  --color-accent: hsl(210 40% 96%);
-  --color-accent-foreground: hsl(222.2 84% 4.9%);
-  --color-destructive: hsl(0 84.2% 60.2%);
-  --color-destructive-foreground: hsl(210 40% 98%);
-  --color-border: hsl(214.3 31.8% 91.4%);
-  --color-input: hsl(214.3 31.8% 91.4%);
-  --color-ring: hsl(221.2 83.2% 53.3%);
-  --radius: 0.75rem;
+ --color-background: hsl(0 0% 100%);
+ --color-foreground: hsl(222.2 84% 4.9%);
+ --color-card: hsl(0 0% 100%);
+ --color-card-foreground: hsl(222.2 84% 4.9%);
+ --color-popover: hsl(0 0% 100%);
+ --color-popover-foreground: hsl(222.2 84% 4.9%);
+ --color-primary: hsl(221.2 83.2% 53.3%);
+ --color-primary-foreground: hsl(210 40% 98%);
+ --color-secondary: hsl(210 40% 96%);
+ --color-secondary-foreground: hsl(222.2 84% 4.9%);
+ --color-muted: hsl(210 40% 96%);
+ --color-muted-foreground: hsl(215.4 16.3% 46.9%);
+ --color-accent: hsl(210 40% 96%);
+ --color-accent-foreground: hsl(222.2 84% 4.9%);
+ --color-destructive: hsl(0 84.2% 60.2%);
+ --color-destructive-foreground: hsl(210 40% 98%);
+ --color-border: hsl(214.3 31.8% 91.4%);
+ --color-input: hsl(214.3 31.8% 91.4%);
+ --color-ring: hsl(221.2 83.2% 53.3%);
+ --radius: 0.75rem;
 
-  @keyframes accordion-down {
-      from {
-          height: 0;
-      }
-      to {
-          height: var(--radix-accordion-content-height);
-      }
-  }
 
-  @keyframes accordion-up {
-      from {
-          height: var(--radix-accordion-content-height);
-      }
-      to {
-          height: 0;
-      }
-  }
+ @keyframes accordion-down {
+     from {
+         height: 0;
+     }
+     to {
+         height: var(--radix-accordion-content-height);
+     }
+ }
 
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+ @keyframes accordion-up {
+     from {
+         height: var(--radix-accordion-content-height);
+     }
+     to {
+         height: 0;
+     }
+ }
+
+
+ --animate-accordion-down: accordion-down 0.2s ease-out;
+ --animate-accordion-up: accordion-up 0.2s ease-out;
 }
+
 
 @layer base {
-  .dark {
-      --color-background: hsl(222.2 84% 4.9%);
-      --color-foreground: hsl(210 40% 98%);
-      --color-card: hsl(222.2 84% 4.9%);
-      --color-card-foreground: hsl(210 40% 98%);
-      --color-popover: hsl(222.2 84% 4.9%);
-      --color-popover-foreground: hsl(210 40% 98%);
-      --color-primary: hsl(217.2 91.2% 59.8%);
-      --color-primary-foreground: hsl(222.2 84% 4.9%);
-      --color-secondary: hsl(217.2 32.6% 17.5%);
-      --color-secondary-foreground: hsl(210 40% 98%);
-      --color-muted: hsl(217.2 32.6% 17.5%);
-      --color-muted-foreground: hsl(215 20.2% 65.1%);
-      --color-accent: hsl(217.2 32.6% 17.5%);
-      --color-accent-foreground: hsl(210 40% 98%);
-      --color-destructive: hsl(0 62.8% 30.6%);
-      --color-destructive-foreground: hsl(210 40% 98%);
-      --color-border: hsl(217.2 32.6% 17.5%);
-      --color-input: hsl(217.2 32.6% 17.5%);
-      --color-ring: hsl(224.3 76.3% 94.1%);
-  }
+ .dark {
+     --color-background: hsl(222.2 84% 4.9%);
+     --color-foreground: hsl(210 40% 98%);
+     --color-card: hsl(222.2 84% 4.9%);
+     --color-card-foreground: hsl(210 40% 98%);
+     --color-popover: hsl(222.2 84% 4.9%);
+     --color-popover-foreground: hsl(210 40% 98%);
+     --color-primary: hsl(217.2 91.2% 59.8%);
+     --color-primary-foreground: hsl(222.2 84% 4.9%);
+     --color-secondary: hsl(217.2 32.6% 17.5%);
+     --color-secondary-foreground: hsl(210 40% 98%);
+     --color-muted: hsl(217.2 32.6% 17.5%);
+     --color-muted-foreground: hsl(215 20.2% 65.1%);
+     --color-accent: hsl(217.2 32.6% 17.5%);
+     --color-accent-foreground: hsl(210 40% 98%);
+     --color-destructive: hsl(0 62.8% 30.6%);
+     --color-destructive-foreground: hsl(210 40% 98%);
+     --color-border: hsl(217.2 32.6% 17.5%);
+     --color-input: hsl(217.2 32.6% 17.5%);
+     --color-ring: hsl(224.3 76.3% 94.1%);
+ }
 }
 
+
 @layer base {
-  * {
-      border-color: var(--color-border);
-  }
-  body {
-      background-color: var(--color-background);
-      color: var(--color-foreground);
-  }
+ * {
+     border-color: var(--color-border);
+ }
+ body {
+     background-color: var(--color-background);
+     color: var(--color-foreground);
+ }
 }
+
 
 @layer components {
-  .container {
-      @apply mx-auto;
-      padding-inline: 30px;
-  }
+ .container {
+     @apply mx-auto;
+     padding-inline: 30px;
+ }
 
-  .gradient-bg {
-      @apply bg-gradient-to-br from-primary/20 via-background to-secondary/20;
-  }
 
-  .glass-effect {
-      @apply backdrop-blur-sm bg-background/80 border border-border/50;
-  }
+ .gradient-bg {
+     @apply bg-gradient-to-br from-primary/20 via-background to-secondary/20;
+ }
+
+
+ .glass-effect {
+     @apply backdrop-blur-sm bg-background/80 border border-border/50;
+ }
 }
+
 
 @layer base {
-  :root {
-    /* Login / brand */
-    --green: #e7f0ea; /* fundo claro do login */
-    --green-dark: #b6d1c2; /* faixa escura do gradiente do login */
-    --field: #e3e3e3; /* cor dos campos de input no login */
+ :root {
+   /* Login / brand */
+   --green: #DFE9E4; /* fundo claro do login */
+   --green-dark: #DFE9E4; /* faixa escura do gradiente do login */
+   --field: #e4efe9; /* cor dos campos de input no login */
 
-    /* Tema claro (default) */
-    --text: #0f172a; /* texto principal */
-    --bg: #d4ece4; /* fundo base das páginas */
-    --panel: #ffffff; /* cartões e painéis */
-    --panel-2: #eef3f0; /* variação clara para botões/ghost */
-    --muted: #475569; /* textos secundários */
-    --brand: #0f5132; /* cor de marca principal */
-    --brand-2: #1a7f55; /* variação da marca (avatar) */
-    --accent: #f1c40f; /* acentos/destaques */
-    --ok: #15803d; /* status ok/sucesso */
-    --late: #d97706; /* status atrasado/alerta */
-    --done: #16a34a; /* status concluído */
-    --warn: #dc2626; /* status erro/alerta vermelho */
-    --shadow: 0 10px 25px rgba(0, 0, 0, .12); /* sombra padrão */
-    --nav-active: #dfe9e4; /* item ativo do menu lateral */
-    --nav-active-border: rgba(15, 81, 50, .25); /* borda do item ativo */
-    --nav-hover: rgba(15, 81, 50, .08); /* hover do menu lateral */
-    --divider: rgba(0, 0, 0, .08); /* divisórias/header line */
-    --card-border: rgba(0, 0, 0, .08); /* bordas de cartões e inputs */
-    --table-divider: rgba(0, 0, 0, .1); /* linhas de tabela */
-    --sidebar-border: rgba(0, 0, 0, .08); /* borda lateral */
-    --bg-gradient-start: #aff0cf; /* início do gradiente de fundo */
-    --bg-gradient-end: #024725; /* fim do gradiente de fundo */
-    --sidebar-bg-start: #a1f3ce; /* início do gradiente da sidebar */
-    --sidebar-bg-end: #84b99f; /* fim do gradiente da sidebar */
-    --primary-start: #0f5132; /* gradiente do botão primário (início) */
-    --primary-end: #1a7f55; /* gradiente do botão primário (fim) */
-    --map-bg-start: #ebf3ef; /* gradiente claro do mapa (início) */
-    --map-bg-end: #dfe9e4; /* gradiente claro do mapa (fim) */
-    --warn-outline: rgba(241, 196, 15, .4); /* contorno de cartões de alerta */
+
+   /* Tema claro (default) */
+   --text: #0f172a; /* texto principal */
+   --bg: #d4ece4; /* fundo base das páginas */
+   --panel: #ffffff; /* cartões e painéis */
+   --panel-2: #eef3f0; /* variação clara para botões/ghost */
+   --muted: #475569; /* textos secundários */
+   --brand: #0f5132; /* cor de marca principal */
+    --brand-2: #A5CAB6; /* variação da marca (avatar) */
+   --accent: #f1c40f; /* acentos/destaques */
+   --ok: #15803d; /* status ok/sucesso */
+   --late: #d97706; /* status atrasado/alerta */
+   --done: #16a34a; /* status concluído */
+   --warn: #dc2626; /* status erro/alerta vermelho */
+   --shadow: 0 10px 25px rgba(0, 0, 0, .12); /* sombra padrão */
+   --nav-active: #dfe9e4; /* item ativo do menu lateral */
+   --nav-active-border: rgba(15, 81, 50, .25); /* borda do item ativo */
+   --nav-hover: rgba(15, 81, 50, .08); /* hover do menu lateral */
+   --divider: rgba(0, 0, 0, .08); /* divisórias/header line */
+   --card-border: rgba(0, 0, 0, .08); /* bordas de cartões e inputs */
+   --table-divider: rgba(0, 0, 0, .1); /* linhas de tabela */
+   --sidebar-border: rgba(0, 0, 0, .08); /* borda lateral */
+   --warn-outline: rgba(241, 196, 15, .4); /* contorno de cartões de alerta */
+
+
+   /* Gradientes e botões (tema claro) */
+    --bg-gradient-start: #DFE9E4; /*altera a cor de fundo pagina*/
+    --bg-gradient-end: #DFE9E4;  /*altera a cor de fundo pagina*/
+    --sidebar-bg-start: #e4efe9; /*altera a cor de fundo onde localiza-se o menu */
+    --sidebar-bg-end: #e4efe9; /*altera a cor de fundo onde localiza-se o menu */
+    --primary-start: #e4efe9; /*altera a cor de fundo dos botoes*/
+    --primary-end: #e4efe9; /*altera a cor de fundo dos botoes*/
+    --primary-border: #B1CBBD; /*altera a cor dda brorda dos botoes */
+    --map-bg-start: #D5E6DD;
+    --map-bg-end: #D5E6DD;
+    --primary-text: #0f5132; /* texto dos botões primários (tema claro) */
   }
 
-  .dark {
-    --green: #072b21; /* fundo escuro do login */
-    --green-dark: #06402C; /* faixa escura do login */
-    --text: #ffffff; /* texto principal no escuro */
-    --bg: #0e1a16; /* fundo base */
-    --panel: #0B3D2E; /* cartões e painéis */
-    --panel-2: #113629; /* variação de painel/botão ghost */
-    --muted: #b6c9c2; /* textos secundários */
-    --brand: #0f5132; /* marca principal */
-    --brand-2: #145a43; /* variação da marca */
-    --accent: #f1c40f; /* acentos/destaques */
-    --ok: #1abc9c; /* status ok/sucesso */
-    --late: #e67e22; /* status atrasado/alerta */
-    --done: #2ecc71; /* status concluído */
-    --warn: #e74c3c; /* status erro/alerta vermelho */
-    --shadow: 0 10px 25px rgba(0, 0, 0, .35); /* sombra forte */
-    --nav-active: #0E4A38; /* item ativo do menu lateral */
-    --nav-active-border: #0b5238; /* borda do item ativo */
-    --nav-hover: rgba(255, 255, 255, .06); /* hover do menu lateral */
-    --divider: rgba(255, 255, 255, .08); /* divisórias/header line */
-    --card-border: rgba(255, 255, 255, .08); /* bordas de cartões e inputs */
-    --table-divider: rgba(255, 255, 255, .06); /* linhas de tabela */
-    --sidebar-border: rgba(255, 255, 255, .08); /* borda lateral */
-    --bg-gradient-start: #06211A; /* início do gradiente de fundo */
-    --bg-gradient-end: #0e1a16; /* fim do gradiente de fundo */
-    --sidebar-bg-start: #041914; /* início do gradiente da sidebar */
-    --sidebar-bg-end: #000e09; /* fim do gradiente da sidebar */
-    --primary-start: #0f3a2b; /* gradiente do botão primário (início) */
-    --primary-end: #145a43; /* gradiente do botão primário (fim) */
-    --map-bg-start: #0b241c; /* gradiente do mapa (início) */
-    --map-bg-end: #0e2f24; /* gradiente do mapa (fim) */
-    --warn-outline: rgba(241, 196, 15, .4); /* contorno de cartões de alerta */
-  }
+
+ .dark {
+   --green: #072b21; /* fundo escuro do login */
+   --green-dark: #06402C; /* faixa escura do login */
+   --text: #ffffff; /* texto principal no escuro */
+   --bg: #0e1a16; /* fundo base */
+   --panel: #0B3D2E; /* cartões e painéis */
+   --panel-2: #113629; /* variação de painel/botão ghost */
+   --muted: #b6c9c2; /* textos secundários */
+   --brand: #0f5132; /* marca principal */
+   --brand-2: #145a43; /* variação da marca */
+   --accent: #f1c40f; /* acentos/destaques */
+   --ok: #1abc9c; /* status ok/sucesso */
+   --late: #e67e22; /* status atrasado/alerta */
+   --done: #2ecc71; /* status concluído */
+   --warn: #e74c3c; /* status erro/alerta vermelho */
+   --shadow: 0 10px 25px rgba(0, 0, 0, .35); /* sombra forte */
+   --nav-active: #0E4A38; /* item ativo do menu lateral */
+   --nav-active-border: #0b5238; /* borda do item ativo */
+   --nav-hover: rgba(255, 255, 255, .06); /* hover do menu lateral */
+   --divider: rgba(255, 255, 255, .08); /* divisórias/header line */
+   --card-border: rgba(255, 255, 255, .08); /* bordas de cartões e inputs */
+   --table-divider: rgba(255, 255, 255, .06); /* linhas de tabela */
+   --sidebar-border: rgba(255, 255, 255, .08); /* borda lateral */
+   --bg-gradient-start: #06211A; /* início do gradiente de fundo */
+   --bg-gradient-end: #0e1a16; /* fim do gradiente de fundo */
+   --sidebar-bg-start: #041914; /* início do gradiente da sidebar */
+   --sidebar-bg-end: #000e09; /* fim do gradiente da sidebar */
+   --primary-start: #0f3a2b; /* gradiente do botão primário (início) */
+   --primary-end: #145a43; /* gradiente do botão primário (fim) */
+   --map-bg-start: #0b241c; /* gradiente do mapa (início) */
+   --map-bg-end: #0e2f24; /* gradiente do mapa (fim) */
+   --warn-outline: rgba(241, 196, 15, .4); /* contorno de cartões de alerta */
+   --primary-border: #0b5238;
+   --primary-text: #ffffff; /* texto dos botões primários no tema escuro */
+ }
 }
+
