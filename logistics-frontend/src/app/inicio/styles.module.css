@@ -38,7 +38,13 @@
 .sidebar nav a:hover{ background:var(--nav-hover); transform:translateX(2px); }
 .sidebar nav a.active{ background:var(--nav-active); border:1px solid var(--nav-active-border); }
 
-.content{ flex:1; padding:22px 26px 40px; }
+.content{
+  flex:1;
+  padding:22px 26px 40px;
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
 
 .topbar {
   display: flex;
@@ -47,7 +53,7 @@
   min-height: 96px;
   padding: 10px 24px;
   position: relative;
-  margin-bottom: 6px;
+  margin-bottom: 12px;
   gap: 16px;
 }
 .topbarLeft { display:flex; align-items:center; gap:18px; }
@@ -82,7 +88,7 @@
   gap:16px;
 }
 .card{
-  background:var(--panel); border:1px solid var(--card-border); border-radius:14px; padding:16px;
+  background:var(--panel); border:1px solid var(--card-border); border-radius:14px; padding:18px;
   box-shadow:var(--shadow);
 }
 .kpi h3{ margin:0 0 10px; font-size:14px; color:var(--muted); font-weight:600; }
@@ -139,7 +145,23 @@
   gap:16px;
   margin-top:8px;
 }
-.card-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.ordersGrid{
+  display:grid;
+  grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);
+  gap:18px;
+  align-items:start;
+  margin:12px 0 16px;
+}
+.ordersPanel{
+  min-height:500px;
+  height:500px;
+  display:flex;
+  flex-direction:column;
+}
+.card-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:12px; }
+.card-head h3{ margin:0; }
+.card-head span,
+.card-head small{ color:var(--muted); }
 
 .table table{ width:100%; border-collapse:collapse; }
 .table th,.table td{ text-align:left; padding:12px 10px; border-bottom:1px solid var(--table-divider); font-size:14px; }
@@ -172,6 +194,8 @@
   .sidebar{ position:fixed; left:0; top:0; bottom:0; transform:translateX(-100%); transition:.25s ease; z-index:20;}
   .content{ padding:16px; }
   .kpis{ grid-template-columns:1fr; }
+  .ordersGrid{ grid-template-columns:1fr; gap:12px; margin:8px 0 10px; }
+  .ordersPanel{ min-height:360px; height:auto; }
   .search input{ width:100%; }
 }
 .pageActions{ display:flex; gap:10px; flex-wrap:wrap; }

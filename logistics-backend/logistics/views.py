@@ -19,6 +19,7 @@ from rest_framework.views import APIView
 
 from .filters import FamiliaFilter, PedidoFilter, ProdutoFilter
 from .ia.genetic_algorithm import calcular_distancia, otimizar_rota_pedidos
+from .constants import DEFAULT_DEPOSITO
 from .models import Familia, Pedido, Produto, Rota, RotaPedido
 from .serializers import (
     FamiliaSerializer,
@@ -145,7 +146,7 @@ class GerarPDFRotaView(APIView):
         try:
             rota_ids = request.data.get("rota", [])
             distancia_total = request.data.get("distancia_total", 0)
-            deposito = request.data.get("deposito", {})
+            deposito = request.data.get("deposito") or DEFAULT_DEPOSITO
             algoritmo = request.data.get("algoritmo", "Algoritmo Genetico")
             tempo_execucao = request.data.get("tempo_execucao", 0)
             geracoes = request.data.get("geracoes", 0)

@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .ia.genetic_algorithm import otimizar_rota_pedidos
+from .constants import DEFAULT_DEPOSITO
 from .models import Pedido, Rota, RotaPedido
 from .relatorios import gerar_relatorio_rota_pdf
 
@@ -30,7 +31,7 @@ class OtimizarRotaGeneticoView(APIView):
     def post(self, request):
         try:
             pedidos_ids = request.data.get("pedidos_ids", [])
-            deposito = request.data.get("deposito")
+            deposito = request.data.get("deposito") or DEFAULT_DEPOSITO
             parametros = request.data.get("parametros", {})
             logger.info("[GA] requisicao: pedidos=%s deposito=%s params=%s", pedidos_ids, deposito, parametros)
 
@@ -270,7 +271,7 @@ class GerarRelatorioRotaPDFView(APIView):
         try:
             rota_id = request.data.get("rota_id")
             distancia_total_km = request.data.get("distancia_total_km")
-            deposito = request.data.get("deposito")
+            deposito = request.data.get("deposito") or DEFAULT_DEPOSITO
             rota_coordenadas = request.data.get("rota_coordenadas")
             map_image_base64 = request.data.get("map_image_base64")
 

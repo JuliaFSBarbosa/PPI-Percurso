@@ -25,7 +25,7 @@ export function MapLocationPicker({ initialCoords, onLocationSelect, disabled = 
   const markerRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [coords, setCoords] = useState<Coordinates>(
-    initialCoords || { latitude: -27.5969, longitude: -53.5495 } // Centro de Frederico Westphalen
+    initialCoords || { latitude: -27.3586, longitude: -53.3958 } // Rua Mauricio Cardoso, 375 - Centro, Frederico Westphalen
   );
 
   useEffect(() => {

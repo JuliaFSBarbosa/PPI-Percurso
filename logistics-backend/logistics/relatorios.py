@@ -15,6 +15,7 @@ from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Tabl
 from reportlab.graphics.shapes import Circle, Drawing, Line, Rect, String
 
 from .ia.genetic_algorithm import calcular_distancia
+from .constants import DEFAULT_DEPOSITO
 from .models import Pedido, Rota
 
 logger = logging.getLogger(__name__)
@@ -277,7 +278,50 @@ def gerar_relatorio_rota_pdf(
         except (TypeError, ValueError):
             raise ValueError("distancia_total_km precisa ser numerico")
 
+    if deposito_coords is None:
+        deposito_coords = DEFAULT_DEPOSITO
+
     coords_para_mapa = rota_coordenadas if rota_coordenadas else _coordenadas_da_rota(rota, deposito_coords)
+
+    # Ordena pela chave "ordem" para garantir que o primeiro ponto seja o de partida.
+    if coords_para_mapa:
+        coords_para_mapa = sorted(coords_para_mapa, key=lambda c: c.get("ordem", 0))
+
+    # Garante que o ponto de partida/retorno (deposito) esteja presente para o link do mapa.
+    if deposito_coords:
+        deposito_ponto = {
+            "latitude": float(deposito_coords["latitude"]),
+            "longitude": float(deposito_coords["longitude"]),
+            "tipo": "deposito",
+            "ordem": 0,
+        }
+        if not coords_para_mapa or coords_para_mapa[0].get("tipo") != "deposito":
+            coords_para_mapa = [deposito_ponto] + coords_para_mapa
+        if not coords_para_mapa[-1].get("tipo") == "deposito":
+            coords_para_mapa = coords_para_mapa + [{**deposito_ponto, "ordem": len(coords_para_mapa)}]
+    else:
+        # Sem deposito informado: usa um ponto marcado como deposito, ou cria um "pseudo deposito"
+        # duplicando o primeiro ponto para garantir origem/destino no link.
+        depositos = [c for c in coords_para_mapa if c.get("tipo") == "deposito"]
+        if depositos:
+            dep = depositos[0]
+        elif coords_para_mapa:
+            primeiro = coords_para_mapa[0]
+            dep = {
+                "latitude": float(primeiro["latitude"]),
+                "longitude": float(primeiro["longitude"]),
+                "tipo": "deposito",
+                "ordem": 0,
+            }
+        else:
+            dep = None
+
+        if dep:
+            entregas = [c for c in coords_para_mapa if c is not dep and c.get("tipo") != "deposito"]
+            coords_para_mapa = [dep] + entregas
+            if not coords_para_mapa[-1].get("tipo") == "deposito":
+                coords_para_mapa.append({**dep, "ordem": len(coords_para_mapa)})
+
     if distancia_total_km is None:
         distancia_total_km = _calcular_distancia_da_rota(coords_para_mapa)
 

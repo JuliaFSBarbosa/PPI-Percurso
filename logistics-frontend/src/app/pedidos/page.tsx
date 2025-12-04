@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useMemo, useState, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
@@ -13,6 +14,11 @@ import styles from "../inicio/styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
 const PAGE_SIZE = 200;
+const defaultDeposito = { latitude: -27.3586, longitude: -53.3958 };
+const MapLocationPicker = dynamic(
+  () => import("@/components/MapLocationPicker").then((mod) => ({ default: mod.MapLocationPicker })),
+  { ssr: false, loading: () => <div>Carregando mapa...</div> }
+);
 
 const parseError = (raw: string, fallback: string, status?: number) => {
   if (!raw) return fallback;
@@ -72,6 +78,18 @@ export default function PedidosPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [savingRouteId, setSavingRouteId] = useState<number | null>(null);
   const [optimizing, setOptimizing] = useState(false);
+  const [depositoCoords, setDepositoCoords] = useState(defaultDeposito);
+  const [showDepositoMap, setShowDepositoMap] = useState(false);
+
+  const handleDepositoChange = (field: "latitude" | "longitude") => (e: ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    if (raw === "" || raw === null) return;
+    const value = Number(raw);
+    setDepositoCoords((prev) => {
+      if (!Number.isFinite(value)) return prev;
+      return { ...prev, [field]: value };
+    });
+  };
 
   const displayName = useMemo(
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
@@ -237,7 +255,7 @@ export default function PedidosPage() {
         throw new Error("Algum pedido selecionado está sem latitude/longitude. Edite e preencha para otimizar.");
       }
 
-      const deposito = { latitude: -27.3585648, longitude: -53.3996933 };
+        const deposito = depositoCoords;
 
       const otimizaResp = await fetch("/api/proxy/otimizar-rota-genetico", {
         method: "POST",
@@ -402,6 +420,60 @@ export default function PedidosPage() {
           </div>
         </header>
 
+        <section className={styles.card} style={{ marginTop: 4, marginBottom: 4 }}>
+          <div className={styles["card-head"]}>
+            <h3>Ponto de partida</h3>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                onClick={() => setDepositoCoords(defaultDeposito)}
+                disabled={optimizing}
+              >
+                Usar padrao
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                onClick={() => setShowDepositoMap((prev) => !prev)}
+                disabled={optimizing}
+              >
+                {showDepositoMap ? "Esconder mapa" : "Selecionar no mapa"}
+              </button>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 180px" }}>
+              <span className={styles.muted}>Latitude</span>
+              <input
+                type="number"
+                step="0.000001"
+                value={depositoCoords.latitude}
+                onChange={handleDepositoChange("latitude")}
+                className={styles.input}
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 180px" }}>
+              <span className={styles.muted}>Longitude</span>
+              <input
+                type="number"
+                step="0.000001"
+                value={depositoCoords.longitude}
+                onChange={handleDepositoChange("longitude")}
+                className={styles.input}
+              />
+            </label>
+          </div>
+          {showDepositoMap && (
+            <div style={{ marginTop: 12 }}>
+              <MapLocationPicker initialCoords={depositoCoords} onLocationSelect={setDepositoCoords} />
+            </div>
+          )}
+          <p className={styles.muted} style={{ marginTop: 8 }}>
+            Essas coordenadas serao usadas como ponto inicial ao otimizar e gerar relatorios.
+          </p>
+        </section>
+
         {error && <p className={styles.muted}>{error}</p>}
         {!error && info && <p className={styles.muted}>{info}</p>}
         {savingRouteId && (
@@ -410,7 +482,7 @@ export default function PedidosPage() {
           </div>
         )}
 
-        <div style={{ display: "grid", gap: 24, gridTemplateColumns: "2fr 1fr", alignItems: "start", marginBottom: 8 }}>
+        <div className={styles.ordersGrid}>
           <SelectedOrdersMap
             pedidos={selectedOrders.map((p) => ({
               id: p.id,
@@ -424,9 +496,12 @@ export default function PedidosPage() {
             }))}
           />
 
-          <section className={styles.card} style={{ height: "100%" }}>
+          <section className={`${styles.card} ${styles.ordersPanel}`}>
             <div className={styles["card-head"]}>
               <h3>Resumo dos selecionados</h3>
+              <span className={styles.muted}>
+                {selectedOrders.length > 0 ? `${selectedOrders.length} pedido(s)` : "Nenhum pedido selecionado"}
+              </span>
             </div>
             {selectedOrders.length === 0 && <p className={styles.muted}>Selecione pedidos na tabela.</p>}
             {selectedOrders.length > 0 && (

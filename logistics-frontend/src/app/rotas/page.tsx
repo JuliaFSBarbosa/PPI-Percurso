@@ -1,16 +1,14 @@
 "use client";
-
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, ChangeEvent } from "react";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import styles from "../inicio/styles.module.css";
 import RouteMapViewer from "@/components/RouteMapViewer";
-
 const inter = InterFont({ subsets: ["latin"] });
-
+const defaultDeposito = { latitude: -27.3586, longitude: -53.3958 };
 const parseError = (raw: string, fallback: string, status?: number) => {
   if (!raw) return fallback;
   try {
@@ -29,28 +27,23 @@ const parseError = (raw: string, fallback: string, status?: number) => {
   }
   return raw || fallback;
 };
-
 const decimalFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
-
 const formatDate = (value?: string) => {
   if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("pt-BR");
 };
-
 const formatWeight = (value?: number) => {
   if (typeof value !== "number") return "-";
   return `${decimalFormatter.format(value)} kg`;
 };
-
 const formatPercent = (value?: number) => {
   if (typeof value !== "number") return "-";
   return `${Math.round(value)}%`;
 };
-
 const statusBadge = (status: RotaStatus) => {
   switch (status) {
     case "PLANEJADA":
@@ -63,29 +56,28 @@ const statusBadge = (status: RotaStatus) => {
       return styles.badge;
   }
 };
-
-// Monta link para Google Maps com origem fixa e múltiplas paradas
-const buildMapsLink = (coords: { latitude: number; longitude: number }[]) => {
+// Monta link para Google Maps com origem selecionada e multiplas paradas
+const buildMapsLink = (
+  coords: { latitude: number; longitude: number }[],
+  deposito: { latitude: number; longitude: number } = defaultDeposito
+) => {
   if (!coords || coords.length === 0) return null;
-
-  // ponto de partida padrão (ajuste conforme necessário)
-  const depositoLat = -27.3585648;
-  const depositoLng = -53.3996933;
-
-  const origin = `${depositoLat},${depositoLng}`;
+  const lat = Number(deposito?.latitude);
+  const lng = Number(deposito?.longitude);
+  const origin =
+    Number.isFinite(lat) && Number.isFinite(lng)
+      ? `${lat},${lng}`
+      : `${defaultDeposito.latitude},${defaultDeposito.longitude}`;
   const destination = `${coords[coords.length - 1].latitude},${coords[coords.length - 1].longitude}`;
   const waypoints = coords.slice(0, -1).map((c) => `${c.latitude},${c.longitude}`).join("|");
-
   const params = new URLSearchParams();
   params.set("api", "1");
   params.set("origin", origin);
   params.set("destination", destination);
   if (waypoints) params.set("waypoints", waypoints);
   params.set("travelmode", "driving");
-
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 };
-
 export default function RotasPage() {
   const { data: session } = useSession();
   const [rotas, setRotas] = useState<Rota[]>([]);
@@ -97,13 +89,12 @@ export default function RotasPage() {
   const [loadingPedidosId, setLoadingPedidosId] = useState<number | null>(null);
   const [loadingMapsId, setLoadingMapsId] = useState<number | null>(null);
   const [loadingPdfId, setLoadingPdfId] = useState<number | null>(null);
+  const [optimizedCoords, setOptimizedCoords] = useState<Record<number, { latitude: number; longitude: number }[]>>({});
   const [snapshotCoords, setSnapshotCoords] = useState<{ latitude: number; longitude: number; label?: string }[] | null>(
     null
   );
   const snapshotRef = useRef<HTMLDivElement | null>(null);
-
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
   const ensureHtml2Canvas = async () => {
     if (typeof window === "undefined") return null;
     if ((window as any).html2canvas) return (window as any).html2canvas;
@@ -124,7 +115,6 @@ export default function RotasPage() {
     });
     return (window as any).html2canvas || null;
   };
-
   const displayName = useMemo(
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
@@ -133,7 +123,6 @@ export default function RotasPage() {
     () => (displayName.trim()[0] ? displayName.trim()[0].toUpperCase() : "U"),
     [displayName]
   );
-
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -161,7 +150,6 @@ export default function RotasPage() {
       active = false;
     };
   }, [reloadKey]);
-
   const fetchRotaDetail = async (rotaId: number): Promise<Rota | null> => {
     try {
       const dResp = await fetch(`/api/proxy/rotas/${rotaId}`, { cache: "no-store" });
@@ -175,7 +163,6 @@ export default function RotasPage() {
       return null;
     }
   };
-
   const capturarMapa = async (coords: { latitude: number; longitude: number; label?: string }[]) => {
     if (!coords || coords.length === 0) return null;
     setSnapshotCoords(coords);
@@ -193,6 +180,29 @@ export default function RotasPage() {
     }
   };
 
+  const buildCoordsFromRota = (rota: Rota): { latitude: number; longitude: number }[] => {
+    const pedidos = Array.isArray(rota?.pedidos) ? [...rota.pedidos] : [];
+    pedidos.sort((a, b) => (a.ordem_entrega || 0) - (b.ordem_entrega || 0));
+    return pedidos
+      .map((p) => {
+        const lat = typeof p.pedido.latitude === "string" ? parseFloat(p.pedido.latitude) : p.pedido.latitude;
+        const lng = typeof p.pedido.longitude === "string" ? parseFloat(p.pedido.longitude) : p.pedido.longitude;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        return { latitude: lat, longitude: lng };
+      })
+      .filter(Boolean) as { latitude: number; longitude: number }[];
+  };
+
+  const ensureCoords = async (rotaId: number): Promise<{ latitude: number; longitude: number }[] | null> => {
+    let det = rotaDetails[rotaId];
+    if (!det) {
+      det = await fetchRotaDetail(rotaId);
+    }
+    if (!det) return null;
+    const coords = buildCoordsFromRota(det);
+    setOptimizedCoords((prev) => ({ ...prev, [rotaId]: coords }));
+    return coords;
+  };
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
       <aside className={styles.sidebar}>
@@ -242,6 +252,7 @@ export default function RotasPage() {
             </div>
           </div>
         </header>
+        
         <section className={`${styles.card} ${styles.table}`}>
           <div className={styles["card-head"]}>
             <h3>Rotas cadastradas</h3>
@@ -286,23 +297,12 @@ export default function RotasPage() {
                             setLoadingMapsId(rota.id);
                             try {
                               let det = rotaDetails[rota.id];
-                              if (!det) {
-                                const fetched = await fetchRotaDetail(rota.id);
-                                det = fetched;
+                              let coords = optimizedCoords[rota.id];
+                              if (!coords) {
+                                coords = await ensureCoords(rota.id);
                               }
-                              const pedidos = Array.isArray(det?.pedidos) ? [...det.pedidos] : [];
-                              pedidos.sort((a, b) => (a.ordem_entrega || 0) - (b.ordem_entrega || 0));
-                              const coords =
-                                pedidos
-                                  .map((p) => {
-                                    const lat = typeof p.pedido.latitude === "string" ? parseFloat(p.pedido.latitude) : p.pedido.latitude;
-                                    const lng = typeof p.pedido.longitude === "string" ? parseFloat(p.pedido.longitude) : p.pedido.longitude;
-                                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-                                    return { latitude: lat, longitude: lng };
-                                  })
-                                  .filter(Boolean) as { latitude: number; longitude: number }[];
                               if (coords && coords.length > 0) {
-                                const link = buildMapsLink(coords);
+                                const link = buildMapsLink(coords, defaultDeposito);
                                 if (link) window.open(link, "_blank", "noopener,noreferrer");
                               }
                             } finally {
@@ -323,32 +323,20 @@ export default function RotasPage() {
                           setLoadingPdfId(rota.id);
                           try {
                             let det = rotaDetails[rota.id] || (await fetchRotaDetail(rota.id));
-                            const pedidos = Array.isArray(det?.pedidos) ? [...det.pedidos] : [];
-                            pedidos.sort((a, b) => (a.ordem_entrega || 0) - (b.ordem_entrega || 0));
-                            const coords =
-                              pedidos
-                                .map((p, idx) => {
-                                  const lat =
-                                    typeof p.pedido.latitude === "string"
-                                      ? parseFloat(p.pedido.latitude)
-                                      : p.pedido.latitude;
-                                  const lng =
-                                    typeof p.pedido.longitude === "string"
-                                      ? parseFloat(p.pedido.longitude)
-                                      : p.pedido.longitude;
-                                  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-                                  return { latitude: lat, longitude: lng, label: `#${idx + 1}` };
-                                })
-                                .filter(Boolean) as { latitude: number; longitude: number; label?: string }[];
-
+                            if (!det) throw new Error("Rota nao encontrada");
+                            const coords = buildCoordsFromRota(det).map((c, idx) => ({
+                              ...c,
+                              label: `#${idx + 1}`,
+                            }));
+                            const depositoPayload = defaultDeposito;
+                            const coordsForMap =
+                              coords.length > 0 ? [{ ...depositoPayload, label: "Dep" }, ...coords] : coords;
                             let mapImageBase64: string | null = null;
-                            if (coords.length > 0) {
-                              mapImageBase64 = await capturarMapa(coords);
+                            if (coordsForMap.length > 0) {
+                              mapImageBase64 = await capturarMapa(coordsForMap);
                             }
-
-                            const payload: any = { rota_id: rota.id };
+                            const payload: any = { rota_id: rota.id, deposito: depositoPayload };
                             if (mapImageBase64) payload.map_image_base64 = mapImageBase64;
-
                             const resp = await fetch("/api/proxy/rotas/relatorio-pdf", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },

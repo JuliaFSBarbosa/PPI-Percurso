@@ -124,13 +124,19 @@ export function SelectedOrdersMap({ pedidos }: Props) {
   }, [pedidos]);
 
   return (
-    <section className={`${styles.card} ${styles.map}`} style={{ minHeight: "320px" }}>
-      <div className={styles["card-head"]}></div>
+    <section className={`${styles.card} ${styles.map} ${styles.ordersPanel}`}>
+      <div className={styles["card-head"]}>
+        <h3>Mapa dos selecionados</h3>
+        <span className={styles.muted}>
+          {pedidos.length > 0 ? `${pedidos.length} pedido(s)` : "Nenhum selecionado"}
+        </span>
+      </div>
       <div
         ref={mapRef}
         style={{
           width: "100%",
-          height: "360px",
+          flex: 1,
+          minHeight: "320px",
           borderRadius: "12px",
           overflow: "hidden",
           background: "var(--panel)",
