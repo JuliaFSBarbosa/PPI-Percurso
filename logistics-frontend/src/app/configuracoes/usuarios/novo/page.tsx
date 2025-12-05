@@ -1,12 +1,15 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../../../inicio/styles.module.css";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
+import { ProfileQuickCreate } from "@/components/usuarios/ProfileQuickCreate";
+import { useProfileOptions } from "@/hooks/useProfileOptions";
 
 const inter = InterFont({ subsets: ["latin"] });
 
@@ -32,15 +35,34 @@ export default function NovoUsuárioPage() {
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
+  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
   const avatarLetter = useMemo(
     () => (displayName.trim()[0] ? displayName.trim()[0].toUpperCase() : "U"),
     [displayName]
   );
 
-  const [form, setForm] = useState({ name: "", email: "", password: "", is_superuser: false });
-  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({});
+  const { profiles, loading: loadingProfiles, error: profilesError, addProfile } = useProfileOptions();
+  const [form, setForm] = useState({ name: "", email: "", password: "", is_superuser: false, profileId: "" });
+  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string; profileId?: string }>({});
   const [message, setMessage] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const selectedProfile = profiles.find((profile) => String(profile.id) === form.profileId);
+  const isDefaultProfileSelected = !!selectedProfile?.is_default;
+  const canToggleAdmin = !!session?.user?.is_superuser && !isDefaultProfileSelected;
+
+  useEffect(() => {
+    if (loadingProfiles || !profiles.length || form.profileId) return;
+    const defaultProfile = profiles.find((profile) => profile.is_default) ?? profiles[0];
+    if (defaultProfile) {
+      setForm((prev) => ({ ...prev, profileId: String(defaultProfile.id) }));
+    }
+  }, [loadingProfiles, profiles, form.profileId]);
+
+  useEffect(() => {
+    if (isDefaultProfileSelected && form.is_superuser) {
+      setForm((prev) => ({ ...prev, is_superuser: false }));
+    }
+  }, [isDefaultProfileSelected, form.is_superuser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,28 +71,38 @@ export default function NovoUsuárioPage() {
     if (!form.name.trim()) nextErrors.name = "Informe o nome.";
     if (!form.email.trim()) nextErrors.email = "Informe o email.";
     if (!form.password || form.password.length < 6) nextErrors.password = "Senha deve ter 6 caracteres.";
+    if (!form.is_superuser && !form.profileId) nextErrors.profileId = "Selecione um perfil.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
     setSubmitting(true);
     try {
-      const resp = await fetch("/api/proxy/Usuários", {
+      const payload: Record<string, unknown> = {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        is_superuser: form.is_superuser,
+      };
+      if (form.profileId) payload.profile_id = Number(form.profileId);
+      const resp = await fetch("/api/proxy/usuarios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          name: form.name.trim(),
-          email: form.email.trim(),
-          password: form.password,
-          is_superuser: form.is_superuser,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!resp.ok) {
         const text = await resp.text();
         throw new Error(formatError(text, "Falha ao cadastrar Usuário."));
       }
       setMessage("Usuário criado com sucesso.");
-      setForm({ name: "", email: "", password: "", is_superuser: false });
+      const defaultProfile = profiles.find((profile) => profile.is_default) ?? profiles[0];
+      setForm({
+        name: "",
+        email: "",
+        password: "",
+        is_superuser: false,
+        profileId: defaultProfile ? String(defaultProfile.id) : "",
+      });
       setTimeout(() => router.push("/configuracoes"), 1200);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Erro inesperado ao salvar.");
@@ -81,20 +113,7 @@ export default function NovoUsuárioPage() {
 
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhao" />
-        </div>
-        <nav>
-          <Link href="/inicio">Inicio</Link>
-          <Link href="/rotas">Rotas</Link>
-          <Link href="/pedidos">Pedidos</Link>
-          <Link href="/produtos">Produtos</Link>
-          <Link className={styles.active} aria-current="page" href="/configuracoes">
-            Usuários
-          </Link>
-        </nav>
-      </aside>
+      <AppSidebar active="usuarios" />
       <main className={styles.content}>
         <header className={styles.topbar}>
           <div>
@@ -103,7 +122,7 @@ export default function NovoUsuárioPage() {
           <div className={styles.right}>
             <div className={styles.user}>
             <Link
-              href="/configuracoes"
+              href="/configuracoes/perfil"
               className={styles.avatar}
               aria-label="Ir para usuários"
               title="Ir para usuários"
@@ -112,7 +131,7 @@ export default function NovoUsuárioPage() {
             </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
-              <small>Administrador</small>
+              <small>{roleLabel}</small>
             </div>
             <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
             <button
@@ -167,16 +186,50 @@ export default function NovoUsuárioPage() {
               {errors.password && <small className={styles.muted}>{errors.password}</small>}
             </div>
             <div className={styles.field}>
-              <label htmlFor="is_superuser">Administrador</label>
-              <div className={styles.inlineField}>
-                <input
-                  id="is_superuser"
-                  type="checkbox"
-                  checked={form.is_superuser}
-                  onChange={(e) => setForm((prev) => ({ ...prev, is_superuser: e.target.checked }))}
-                />
-              </div>
+              <label htmlFor="profile">Perfil</label>
+              <select
+                id="profile"
+                className={styles.input}
+                value={form.profileId}
+                disabled={loadingProfiles || form.is_superuser}
+                onChange={(e) => setForm((prev) => ({ ...prev, profileId: e.target.value }))}
+              >
+                <option value="">Selecione um perfil</option>
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name}
+                  </option>
+                ))}
+              </select>
+              {form.is_superuser && (
+                <small className={styles.muted}>Administradores têm acesso total às telas.</small>
+              )}
+              {loadingProfiles && <small className={styles.muted}>Carregando perfis...</small>}
+              {!loadingProfiles && profilesError && <small className={styles.muted}>{profilesError}</small>}
+              {errors.profileId && <small className={styles.muted}>{errors.profileId}</small>}
             </div>
+            <ProfileQuickCreate
+              onCreated={(profile) => {
+                addProfile(profile);
+                setForm((prev) => ({ ...prev, profileId: String(profile.id) }));
+              }}
+            />
+            {canToggleAdmin && (
+              <div className={styles.field}>
+                <label htmlFor="is_superuser">Administrador</label>
+                <div className={styles.inlineField}>
+                  <input
+                    id="is_superuser"
+                    type="checkbox"
+                    checked={form.is_superuser}
+                    onChange={(e) => setForm((prev) => ({ ...prev, is_superuser: e.target.checked }))}
+                  />
+                </div>
+              </div>
+            )}
+            {isDefaultProfileSelected && (
+              <small className={styles.muted}>O perfil padrão possui permissões limitadas e não pode ser administrador.</small>
+            )}
             {message && <p className={styles.muted}>{message}</p>}
             <div className={styles["quick-actions"]}>
               <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={submitting}>

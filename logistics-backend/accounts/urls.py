@@ -5,6 +5,9 @@ from accounts.views import (
     MeView,
     UserAdminView,
     UserAdminDetailView,
+    ProfileListCreateView,
+    ProfileDetailView,
+    ScreenPermissionView,
 )
 
 urlpatterns = [
@@ -13,5 +16,7 @@ urlpatterns = [
     path('me', MeView.as_view()),
     path('users/', UserAdminView.as_view()),
     path('users/<int:user_id>/', UserAdminDetailView.as_view()),
-    
+    path('profiles/screens/', ScreenPermissionView.as_view()),
+    path('profiles/', ProfileListCreateView.as_view()),
+    path('profiles/<int:profile_id>/', ProfileDetailView.as_view()),
 ]

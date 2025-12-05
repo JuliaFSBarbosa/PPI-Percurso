@@ -7,6 +7,9 @@ import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../../../../inicio/styles.module.css";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
+import { ProfileQuickCreate } from "@/components/usuarios/ProfileQuickCreate";
+import { useProfileOptions } from "@/hooks/useProfileOptions";
 
 const inter = InterFont({ subsets: ["latin"] });
 
@@ -45,24 +48,31 @@ export default function EditarUsuarioPage() {
     () => (session?.user?.name || session?.user?.email || "Usuario").toString(),
     [session?.user?.name, session?.user?.email]
   );
+  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
   const avatarLetter = useMemo(
     () => (displayName.trim()[0] ? displayName.trim()[0].toUpperCase() : "U"),
     [displayName]
   );
+
+  const { profiles, loading: loadingProfiles, error: profilesError, addProfile } = useProfileOptions();
 
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
     is_superuser: false,
+    profileId: "",
   });
-  const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; email?: string; profileId?: string }>({});
   const [message, setMessage] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const badgeClass = (isAdmin?: boolean) =>
     isAdmin ? `${styles.badge} ${styles.ok}` : `${styles.badge}`;
+  const selectedProfile = profiles.find((profile) => String(profile.id) === form.profileId);
+  const isDefaultProfileSelected = !!selectedProfile?.is_default;
+  const canToggleAdmin = !!session?.user?.is_superuser && !isDefaultProfileSelected;
 
   useEffect(() => {
     const id = params.id;
@@ -86,6 +96,7 @@ export default function EditarUsuarioPage() {
           email: data.email ?? "",
           password: "",
           is_superuser: !!data.is_superuser,
+          profileId: data.profile?.id ? String(data.profile.id) : "",
         });
         setReady(true);
       } catch (err) {
@@ -102,12 +113,27 @@ export default function EditarUsuarioPage() {
     };
   }, [params.id]);
 
+  useEffect(() => {
+    if (loadingProfiles || !profiles.length || form.profileId || form.is_superuser) return;
+    const defaultProfile = profiles.find((profile) => profile.is_default) ?? profiles[0];
+    if (defaultProfile) {
+      setForm((prev) => ({ ...prev, profileId: String(defaultProfile.id) }));
+    }
+  }, [loadingProfiles, profiles, form.profileId, form.is_superuser]);
+
+  useEffect(() => {
+    if (isDefaultProfileSelected && form.is_superuser) {
+      setForm((prev) => ({ ...prev, is_superuser: false }));
+    }
+  }, [isDefaultProfileSelected, form.is_superuser]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage("");
     const nextErrors: typeof errors = {};
     if (!form.name.trim()) nextErrors.name = "Informe o nome.";
     if (!form.email.trim()) nextErrors.email = "Informe o email.";
+    if (!form.is_superuser && !form.profileId) nextErrors.profileId = "Selecione um perfil.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -119,6 +145,7 @@ export default function EditarUsuarioPage() {
         is_superuser: form.is_superuser,
       };
       if (form.password) payload.password = form.password;
+       if (form.profileId) payload.profile_id = Number(form.profileId);
       const resp = await fetch(`/api/proxy/usuarios/${params.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -140,20 +167,7 @@ export default function EditarUsuarioPage() {
 
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhao" />
-        </div>
-        <nav>
-          <Link href="/inicio">Inicio</Link>
-          <Link href="/rotas">Rotas</Link>
-          <Link href="/pedidos">Pedidos</Link>
-          <Link href="/produtos">Produtos</Link>
-          <Link className={styles.active} aria-current="page" href="/configuracoes">
-            Usuarios
-          </Link>
-        </nav>
-      </aside>
+      <AppSidebar active="usuarios" />
       <main className={styles.content}>
         <header className={styles.topbar}>
           <div>
@@ -162,7 +176,7 @@ export default function EditarUsuarioPage() {
           <div className={styles.right}>
             <div className={styles.user}>
             <Link
-              href="/configuracoes"
+              href="/configuracoes/perfil"
               className={styles.avatar}
               aria-label="Ir para usuários"
               title="Ir para usuários"
@@ -171,7 +185,7 @@ export default function EditarUsuarioPage() {
             </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
-              <small>Administrador</small>
+              <small>{roleLabel}</small>
             </div>
             <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
             <button
@@ -199,7 +213,7 @@ export default function EditarUsuarioPage() {
                   <span>{form.email || searchParams.get("email") || "Email não informado"}</span>
                 </div>
                 <span className={badgeClass(form.is_superuser)}>
-                  {form.is_superuser || searchParams.get("admin") === "1" ? "Administrador" : "Padrão"}
+                  {form.is_superuser ? "Administrador" : selectedProfile?.name || searchParams.get("perfil") || "Usuário padrão"}
                 </span>
               </div>
               <div className={styles.field}>
@@ -238,16 +252,50 @@ export default function EditarUsuarioPage() {
                   disabled={loading}
                 />
               </div>
-              <div className={`${styles.field} ${styles.inlineField}`}>
-                <label htmlFor="is_superuser">Administrador</label>
-                <input
-                  id="is_superuser"
-                  type="checkbox"
-                  checked={form.is_superuser}
-                  onChange={(e) => setForm((prev) => ({ ...prev, is_superuser: e.target.checked }))}
-                  disabled={loading}
-                />
+              <div className={styles.field}>
+                <label htmlFor="profile">Perfil</label>
+                <select
+                  id="profile"
+                  className={styles.input}
+                  value={form.profileId}
+                  disabled={loading || loadingProfiles || form.is_superuser}
+                  onChange={(e) => setForm((prev) => ({ ...prev, profileId: e.target.value }))}
+                >
+                  <option value="">Selecione um perfil</option>
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+                {form.is_superuser && (
+                  <small className={styles.muted}>Administradores têm acesso total às telas.</small>
+                )}
+                {loadingProfiles && <small className={styles.muted}>Carregando perfis...</small>}
+                {!loadingProfiles && profilesError && <small className={styles.muted}>{profilesError}</small>}
+                {errors.profileId && <small className={styles.muted}>{errors.profileId}</small>}
               </div>
+              <ProfileQuickCreate
+                onCreated={(profile) => {
+                  addProfile(profile);
+                  setForm((prev) => ({ ...prev, profileId: String(profile.id) }));
+                }}
+              />
+              {canToggleAdmin && (
+                <div className={`${styles.field} ${styles.inlineField}`}>
+                  <label htmlFor="is_superuser">Administrador</label>
+                  <input
+                    id="is_superuser"
+                    type="checkbox"
+                    checked={form.is_superuser}
+                    onChange={(e) => setForm((prev) => ({ ...prev, is_superuser: e.target.checked }))}
+                    disabled={loading}
+                  />
+                </div>
+              )}
+              {isDefaultProfileSelected && (
+                <small className={styles.muted}>O perfil padrão possui permissões limitadas e não pode ser administrador.</small>
+              )}
               {message && <p className={styles.muted}>{message}</p>}
               <div className={styles["quick-actions"]}>
                 <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={submitting || loading}>

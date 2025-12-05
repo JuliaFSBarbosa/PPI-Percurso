@@ -9,6 +9,7 @@ import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../../../inicio/styles.module.css";
 import { parseApiError } from "@/lib/apiError";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
 
 // Importação dinâmica do seletor de mapa
 const MapLocationPicker = dynamic(
@@ -29,6 +30,7 @@ export default function EditarPedidoPage() {
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
+  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
 
   const avatarLetter = useMemo(
     () => (displayName.trim()[0] ? displayName.trim()[0].toUpperCase() : "U"),
@@ -250,21 +252,7 @@ export default function EditarPedidoPage() {
   // ---------------------- RENDER ---------------------
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhao" />
-        </div>
-        <nav>
-          <Link href="/inicio">Inicio</Link>
-          <Link href="/rotas">Rotas</Link>
-          <Link href="/pedidos">Pedidos</Link>
-          <Link className={styles.active} aria-current="page" href={`/entregas/${params.id}/editar`}>
-            Pedidos
-          </Link>
-          <Link href="/produtos">Produtos</Link>
-          <Link href="/configuracoes">Usuarios</Link>
-        </nav>
-      </aside>
+      <AppSidebar active="pedidos" />
 
       <main className={styles.content}>
         <header className={styles.topbar}>
@@ -275,7 +263,7 @@ export default function EditarPedidoPage() {
           <div className={styles.right}>
             <div className={styles.user}>
             <Link
-              href="/configuracoes"
+              href="/configuracoes/perfil"
               className={styles.avatar}
               aria-label="Ir para usuários"
               title="Ir para usuários"
@@ -284,7 +272,7 @@ export default function EditarPedidoPage() {
             </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
-              <small>Administrador</small>
+              <small>{roleLabel}</small>
             </div>
             <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
             <button

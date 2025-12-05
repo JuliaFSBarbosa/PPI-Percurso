@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import dynamic from "next/dynamic";
 import styles from "../../inicio/styles.module.css";
 import { extractMessage, parseApiError } from "@/lib/apiError";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
 
 // Importa o componente do mapa dinamicamente (client-side only)
 const MapLocationPicker = dynamic(
@@ -28,6 +29,7 @@ export default function NovoPedidoPage() {
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
+  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
   const avatarLetter = useMemo(
     () => (displayName.trim()[0] ? displayName.trim()[0].toUpperCase() : "U"),
     [displayName]
@@ -174,21 +176,7 @@ export default function NovoPedidoPage() {
 
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhao" />
-        </div>
-        <nav>
-          <Link href="/inicio">Inicio</Link>
-          <Link href="/rotas">Rotas</Link>
-          <Link href="/pedidos">Pedidos</Link>
-          <Link className={styles.active} aria-current="page" href="/entregas/novo">
-            Pedidos
-          </Link>
-          <Link href="/produtos">Produtos</Link>
-          <Link href="/configuracoes">Usuarios</Link>
-        </nav>
-      </aside>
+      <AppSidebar active="pedidos" />
       <main className={styles.content}>
         <header className={styles.topbar}>
           <div>
@@ -197,7 +185,7 @@ export default function NovoPedidoPage() {
           <div className={styles.right}>
             <div className={styles.user}>
             <Link
-              href="/configuracoes"
+              href="/configuracoes/perfil"
               className={styles.avatar}
               aria-label="Ir para usuários"
               title="Ir para usuários"
@@ -206,7 +194,7 @@ export default function NovoPedidoPage() {
             </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
-              <small>Administrador</small>
+              <small>{roleLabel}</small>
             </div>
             <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
             <button

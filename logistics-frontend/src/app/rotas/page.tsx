@@ -7,6 +7,7 @@ import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import styles from "../inicio/styles.module.css";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
 import RouteMapViewer from "@/components/RouteMapViewer";
 import { parseApiError } from "@/lib/apiError";
 import { statusLabels } from "@/constants/labels";
@@ -67,6 +68,9 @@ export default function RotasPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { data: session } = useSession();
+  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
+  const deniedAccess = searchParams?.get("acesso") === "negado";
+  const isDefaultProfile = !!session?.user?.profile?.is_default;
   const [rotas, setRotas] = useState<Rota[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -293,32 +297,24 @@ export default function RotasPage() {
   };
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhǜo" />
-        </div>
-        <nav>
-          <Link href="/inicio">Início</Link>
-          <Link className={styles.active} aria-current="page" href="/rotas">
-            Rotas
-          </Link>
-          <Link href="/pedidos">Pedidos</Link>
-          <Link href="/produtos">Produtos</Link>
-          <Link href="/configuracoes">Usuários</Link>
-        </nav>
-      </aside>
+      <AppSidebar active="rotas" />
       <main className={styles.content}>
         {loading && <LoadingOverlay message="Carregando rotas..." />}
+        {deniedAccess && (
+          <div className={styles.alert}>Acesso não permitido para a tela solicitada.</div>
+        )}
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
             <div className={styles.pageActions}>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.ghost}`}
-                onClick={() => router.push("/pedidos")}
-              >
-                Selecionar pedidos
-              </button>
+              {!isDefaultProfile && (
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.ghost}`}
+                  onClick={() => router.push("/pedidos")}
+                >
+                  Selecionar pedidos
+                </button>
+              )}
               <button
                 type="button"
                 className={`${styles.btn} ${styles.primary}`}
@@ -332,7 +328,7 @@ export default function RotasPage() {
           <div className={styles.right}>
             <div className={styles.user}>
             <Link
-              href="/configuracoes"
+              href="/configuracoes/perfil"
               className={styles.avatar}
               aria-label="Ir para usuários"
               title="Ir para usuários"
@@ -341,7 +337,7 @@ export default function RotasPage() {
             </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
-              <small>Administrador</small>
+              <small>{roleLabel}</small>
             </div>
             <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
             <button

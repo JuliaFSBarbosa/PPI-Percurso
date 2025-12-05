@@ -7,8 +7,15 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import AuthenticationFailed
 
-from accounts.models import User
-from accounts.serializers import UserSerializer, SignUpSerializer, UserAdminUpdateSerializer
+from accounts.models import User, Profile
+from accounts.serializers import (
+    UserSerializer,
+    SignUpSerializer,
+    UserAdminUpdateSerializer,
+    ProfileSerializer,
+    ProfileDetailSerializer,
+)
+from accounts.constants import SCREEN_DEFINITIONS
 from django.shortcuts import get_object_or_404
 
 from core.utils.exceptions import ValidationError
@@ -113,3 +120,49 @@ class UserAdminDetailView(APIView):
         # Retornamos 200 com payload para evitar problemas de renderização/clients com body vazio em 204.
         return Response({"detail": "Usuário removido com sucesso."}, status=status.HTTP_200_OK)
 
+
+class ProfileListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request):
+        profiles = Profile.objects.all().order_by("name")
+        return Response(ProfileDetailSerializer(profiles, many=True).data)
+
+    def post(self, request: Request):
+        serializer = ProfileSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise ValidationError(format_serializer_error(serializer.errors))
+        profile = serializer.save()
+        return Response(ProfileDetailSerializer(profile).data, status=status.HTTP_201_CREATED)
+
+
+class ProfileDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, profile_id: int):
+        profile = get_object_or_404(Profile, pk=profile_id)
+        return Response(ProfileDetailSerializer(profile).data)
+
+    def put(self, request: Request, profile_id: int):
+        profile = get_object_or_404(Profile, pk=profile_id)
+        serializer = ProfileSerializer(profile, data=request.data, partial=True)
+        if not serializer.is_valid():
+            raise ValidationError(format_serializer_error(serializer.errors))
+        updated = serializer.save()
+        return Response(ProfileDetailSerializer(updated).data)
+
+    def delete(self, request: Request, profile_id: int):
+        profile = get_object_or_404(Profile, pk=profile_id)
+        if profile.is_default:
+            raise ValidationError("Não é possível remover o perfil padrão.")
+        if profile.users.exists():
+            raise ValidationError("Não é possível remover um perfil que está associado a usuários.")
+        profile.delete()
+        return Response({"detail": "Perfil removido com sucesso."}, status=status.HTTP_200_OK)
+
+
+class ScreenPermissionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request):
+        return Response({"screens": SCREEN_DEFINITIONS})

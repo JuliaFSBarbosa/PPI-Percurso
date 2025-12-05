@@ -4,7 +4,6 @@
   Objetivo: autenticar o usuário. Possui validação com Zod (CPF e senha),
   mensagens em PT‑BR e integração via NextAuth Credentials.
 */
-import Link from "next/link";
 import { Inter } from "next/font/google";
 import styles from "./page.module.css";
 import { useEffect, useState } from "react";
@@ -94,15 +93,14 @@ export default function Login() {
               </div>
               {errors.auth && <div className={styles.error}>{errors.auth}</div>}
               <div className={styles.cta}>
-                <button type="submit" className={`${styles.btn} ${styles.primary}`}>Entrar</button>
-                <Link className={styles.btn} href="#">Esqueci minha senha</Link>
+                <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.blockBtn}`}>Entrar</button>
               </div>
             </form>
           </div>
         </div>
         <div className={styles.right}>
           <div className={styles.logoWrap}>
-            <img src="/logo.png" alt="Logo Percurso" />
+            <img src="/logo_percurso.png" alt="Logo Percurso" />
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../../inicio/styles.module.css";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
 
 const inter = InterFont({ subsets: ["latin"] });
 
@@ -38,6 +39,7 @@ export default function NovoProdutoPage() {
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
+  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
   const avatarLetter = useMemo(
     () => (displayName.trim()[0] ? displayName.trim()[0].toUpperCase() : "U"),
     [displayName]
@@ -134,18 +136,7 @@ export default function NovoProdutoPage() {
 
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhao" />
-        </div>
-        <nav>
-          <Link href="/inicio">Inicio</Link>
-          <Link href="/rotas">Rotas</Link>
-          <Link href="/pedidos">Pedidos</Link>
-          <Link className={styles.active} aria-current="page" href="/produtos">Produtos</Link>
-          <Link href="/configuracoes">Usuarios</Link>
-        </nav>
-      </aside>
+      <AppSidebar active="produtos" />
       <main className={styles.content}>
         <header className={styles.topbar}>
           <div>
@@ -154,7 +145,7 @@ export default function NovoProdutoPage() {
           <div className={styles.right}>
             <div className={styles.user}>
             <Link
-              href="/configuracoes"
+              href="/configuracoes/perfil"
               className={styles.avatar}
               aria-label="Ir para usuários"
               title="Ir para usuários"
@@ -163,7 +154,7 @@ export default function NovoProdutoPage() {
             </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
-              <small>Administrador</small>
+              <small>{roleLabel}</small>
             </div>
             <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
             <button

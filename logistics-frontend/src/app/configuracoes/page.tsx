@@ -9,17 +9,13 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../inicio/styles.module.css";
 import { parseApiError } from "@/lib/apiError";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
 
 const inter = InterFont({ subsets: ["latin"] });
 
 const roleBadge = (isAdmin?: boolean) => (isAdmin ? `${styles.badge} ${styles.ok}` : `${styles.badge}`);
 
-type AdminUser = {
-  id: number;
-  name: string;
-  email: string;
-  is_superuser?: boolean;
-};
+type AdminUser = User;
 
 
 export default function UsuariosPage() {
@@ -35,6 +31,7 @@ export default function UsuariosPage() {
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
+  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
   const avatarLetter = useMemo(
     () => (displayName.trim()[0] ? displayName.trim()[0].toUpperCase() : "U"),
     [displayName]
@@ -73,20 +70,7 @@ export default function UsuariosPage() {
 
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhão" />
-        </div>
-        <nav>
-          <Link href="/inicio">Início</Link>
-          <Link href="/rotas">Rotas</Link>
-          <Link href="/pedidos">Pedidos</Link>
-          <Link href="/produtos">Produtos</Link>
-          <Link className={styles.active} aria-current="page" href="/configuracoes">
-            Usuários
-          </Link>
-        </nav>
-      </aside>
+      <AppSidebar active="usuarios" />
 
       <main className={styles.content}>
         {loading && <LoadingOverlay message="Carregando usuários..." />}
@@ -100,12 +84,19 @@ export default function UsuariosPage() {
               >
                 + Novo usuário
               </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.ghost}`}
+                onClick={() => router.push("/configuracoes/perfis")}
+              >
+                Gerenciar perfis
+              </button>
             </div>
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
             <Link
-              href="/configuracoes"
+              href="/configuracoes/perfil"
               className={styles.avatar}
               aria-label="Ir para usuários"
               title="Ir para usuários"
@@ -114,7 +105,7 @@ export default function UsuariosPage() {
             </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
-              <small>Administrador</small>
+              <small>{roleLabel}</small>
             </div>
             <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
             <button
@@ -161,7 +152,7 @@ export default function UsuariosPage() {
                     <td>{user.email}</td>
                     <td>
                       <span className={roleBadge(user.is_superuser)}>
-                        {user.is_superuser ? "Administrador" : "Padrão"}
+                        {user.is_superuser ? "Administrador" : user.profile?.name || "Usuário padrão"}
                       </span>
                     </td>
                     <td>
@@ -175,6 +166,8 @@ export default function UsuariosPage() {
                                 user.name || ""
                               )}&email=${encodeURIComponent(user.email || "")}&admin=${
                                 user.is_superuser ? "1" : "0"
+                              }&perfil=${
+                                encodeURIComponent(user.profile?.name || "")
                               }`
                             )
                           }

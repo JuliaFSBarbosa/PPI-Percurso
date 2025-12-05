@@ -8,6 +8,7 @@ import { useSession, signOut } from "next-auth/react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "../inicio/styles.module.css";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
 
 const inter = InterFont({ subsets: ["latin"] });
 const PAGE_SIZE = 20;
@@ -46,6 +47,7 @@ export default function ProdutosPage() {
     () => (session?.user?.name || session?.user?.email || "Usuário").toString(),
     [session?.user?.name, session?.user?.email]
   );
+  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
 
   const avatarLetter = useMemo(
     () => (displayName.trim()[0] ? displayName.trim()[0].toUpperCase() : "U"),
@@ -96,20 +98,7 @@ export default function ProdutosPage() {
 
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhão" />
-        </div>
-        <nav>
-          <Link href="/inicio">Início</Link>
-          <Link href="/rotas">Rotas</Link>
-          <Link href="/pedidos">Pedidos</Link>
-          <Link className={styles.active} aria-current="page" href="/produtos">
-            Produtos
-          </Link>
-          <Link href="/configuracoes">Usuários</Link>
-        </nav>
-      </aside>
+      <AppSidebar active="produtos" />
 
       <main className={styles.content}>
         {loading && <LoadingOverlay message="Carregando produtos..." />}
@@ -135,7 +124,7 @@ export default function ProdutosPage() {
           <div className={styles.right}>
             <div className={styles.user}>
             <Link
-              href="/configuracoes"
+              href="/configuracoes/perfil"
               className={styles.avatar}
               aria-label="Ir para usuários"
               title="Ir para usuários"
@@ -144,7 +133,7 @@ export default function ProdutosPage() {
             </Link>
             <div className={styles.info}>
               <strong>{displayName}</strong>
-              <small>Administrador</small>
+              <small>{roleLabel}</small>
             </div>
             <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
             <button

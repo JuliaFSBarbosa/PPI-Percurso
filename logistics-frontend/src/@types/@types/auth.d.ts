@@ -1,8 +1,19 @@
+import type { ScreenId } from "@/constants/screens";
+
+type UserProfile = {
+    id: number;
+    name: string;
+    permissions: ScreenId[];
+    is_default?: boolean;
+}
+
 type User = {
     id: number;
     name: string;
     email: string;
     is_superuser?: boolean;
+    profile?: UserProfile | null;
+    permissions?: ScreenId[];
 }
 
 /* API */

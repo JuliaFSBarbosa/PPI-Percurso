@@ -29,8 +29,9 @@
 .panel small{ display:block; margin-top:6px; color: var(--warn); }
 .row{ margin-bottom:10px }
 
-.cta{ margin-top:14px; display:flex; align-items:center; gap:10px }
+.cta{ margin-top:14px }
 .btn{ cursor:pointer; border:none; padding:12px 16px; border-radius:12px; background:#0f2b21; color:#fff; text-decoration:none; display:inline-block }
+.blockBtn{ width:100%; text-align:center; display:block }
 .primary{
   background:linear-gradient(135deg, var(--primary-start), var(--primary-end));
   border:1px solid var(--primary-border);

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { SelectedOrdersMap } from "@/components/pedidos/SelectedOrdersMap";
 import { statusLabels } from "@/constants/labels";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
 import styles from "./styles.module.css";
 
 const inter = InterFont({ subsets: ["latin"] });
@@ -50,7 +51,10 @@ type KPIState = {
 
 export default function InicioPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
+  const deniedAccess = searchParams?.get("acesso") === "negado";
+  const isDefaultProfile = !!session?.user?.profile?.is_default;
 
   const [pedidosHoje, setPedidosHoje] = useState<Pedido[]>([]);
   const [kpis, setKpis] = useState<KPIState>({
@@ -67,6 +71,7 @@ export default function InicioPage() {
     const raw = (session?.user?.name || session?.user?.email || "Usuário").toString();
     return raw;
   }, [session?.user?.name, session?.user?.email]);
+  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
 
   const avatarLetter = useMemo(
     () => (displayName.trim()[0] ? displayName.trim()[0].toUpperCase() : "U"),
@@ -156,46 +161,38 @@ export default function InicioPage() {
 
   return (
     <div className={`${inter.className} ${styles.wrapper}`}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="/caminhao.png" alt="Logomarca Caminhão" />
-        </div>
-        <nav>
-          <Link className={styles.active} aria-current="page" href="/inicio">
-            Início
-          </Link>
-          <Link href="/rotas">Rotas</Link>
-          <Link href="/pedidos">Pedidos</Link>
-          <Link href="/produtos">Produtos</Link>
-          <Link href="/configuracoes">Usuários</Link>
-        </nav>
-      </aside>
+      <AppSidebar active="inicio" />
 
       <main className={styles.content}>
         {loading && <LoadingOverlay message="Carregando dados do dia..." />}
+        {deniedAccess && (
+          <div className={styles.alert}>Acesso não permitido para a tela solicitada.</div>
+        )}
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
-            <div className={styles.pageActions}>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.primary}`}
-                onClick={() => router.push("/pedidos")}
-              >
-                Ver pedidos
-              </button>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.ghost}`}
-                onClick={() => router.push("/entregas/novo")}
-              >
-                + Novo Pedido
-              </button>
-            </div>
+            {!isDefaultProfile && (
+              <div className={styles.pageActions}>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.primary}`}
+                  onClick={() => router.push("/pedidos")}
+                >
+                  Ver pedidos
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.ghost}`}
+                  onClick={() => router.push("/entregas/novo")}
+                >
+                  + Novo Pedido
+                </button>
+              </div>
+            )}
           </div>
           <div className={styles.right}>
             <div className={styles.user}>
               <Link
-                href="/configuracoes"
+                href="/configuracoes/perfil"
                 className={styles.avatar}
                 aria-label="Ir para usuários"
                 title="Ir para usuários"
@@ -204,7 +201,7 @@ export default function InicioPage() {
               </Link>
               <div className={styles.info}>
                 <strong>{displayName}</strong>
-                <small>Administrador</small>
+                <small>{roleLabel}</small>
               </div>
               <ThemeToggle className={`${styles.btn} ${styles.ghost} ${styles.sm}`} />
               <button
@@ -247,7 +244,7 @@ export default function InicioPage() {
             <div className={styles.value}>{kpis.pedidosParaEntrega}</div>
           </div>
           <div className={`${styles.card} ${styles.kpi}`}>
-            <h3>Rotas geradas</h3>
+          <h3>Rotas</h3>
             <div className={styles.value}>{kpis.rotasGeradas}</div>
           </div>
           <div className={`${styles.card} ${styles.kpi}`}>
