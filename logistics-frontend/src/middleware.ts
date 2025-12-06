@@ -14,11 +14,6 @@ export async function middleware(req: NextRequest) {
   }
 
   if (PUBLIC_PATHS.includes(pathname)) {
-    const session = await auth();
-    if (pathname === "/" && session?.user) {
-      const url = new URL("/inicio", req.url);
-      return NextResponse.redirect(url);
-    }
     return NextResponse.next();
   }
 
@@ -56,11 +51,21 @@ export async function middleware(req: NextRequest) {
   }
 
   const permissions = normalizePermissions((session.user as any).permissions);
+  if (screenId === "inicio") {
+    // tela inicial (e sua variação padrão) deve ficar acessível para todos os perfis
+    return NextResponse.next();
+  }
   if (permissions.includes(screenId)) {
     return NextResponse.next();
   }
 
-  const targetPath = firstAllowedPath(permissions);
+  let targetPath = firstAllowedPath(permissions);
+  if (!targetPath) {
+    targetPath = isDefaultProfile ? "/inicio/padrao" : "/inicio";
+  } else if (isDefaultProfile && targetPath === "/inicio") {
+    // mantém usuários do perfil padrão dentro da variante correta da tela inicial
+    targetPath = "/inicio/padrao";
+  }
   const redirectUrl = new URL(targetPath, req.url);
   redirectUrl.searchParams.set("acesso", "negado");
   return NextResponse.redirect(redirectUrl);

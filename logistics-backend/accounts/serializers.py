@@ -50,9 +50,16 @@ class SignUpSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop("password")
+        is_first_user = not User.objects.exists()
         profile = validated_data.get("profile")
-        if not profile:
+
+        if is_first_user:
+            # garante que o primeiro usuário criado possa administrar o sistema
+            validated_data["is_superuser"] = True
+            validated_data["profile"] = Profile.ensure_admin()
+        elif not profile:
             validated_data["profile"] = Profile.ensure_default()
+
         user = User(**validated_data)
         user.set_password(password)
         user.save()
