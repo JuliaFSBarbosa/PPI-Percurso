@@ -199,6 +199,26 @@
 .down{ color:var(--warn); }
 
 .quick-actions{ display:flex; gap:10px; margin:18px 0 6px; }
+.splitAlert{
+  margin:12px 0;
+  padding:12px 16px;
+  border-radius:10px;
+  border:1px solid rgba(249, 181, 51, .4);
+  background:rgba(249, 181, 51, .15);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.splitAlert strong{
+  display:block;
+  font-size:14px;
+}
+.splitDetails{
+  margin:4px 0 0;
+  font-size:13px;
+  color:var(--muted);
+}
 .btn{
   cursor:pointer;
   border:1px solid transparent;
@@ -356,8 +376,6 @@
 }
 .tableFooter{
   margin-top:12px;
-  padding-top:12px;
-  border-top:1px solid var(--table-divider);
   display:flex;
   align-items:center;
   justify-content:space-between;
@@ -408,6 +426,16 @@
   border:1px solid rgba(231,76,60,.25);
   background:rgba(231,76,60,.12);
   color:var(--text);
+  font-size:14px;
+  font-weight:600;
+}
+.alertSuccess{
+  margin:8px 0;
+  padding:12px 16px;
+  border-radius:12px;
+  border:1px solid rgba(46,204,113,.25);
+  background:rgba(46,204,113,.12);
+  color:var(--ok);
   font-size:14px;
   font-weight:600;
 }
@@ -465,3 +493,51 @@
 }
 .userSummary strong{ display:block; font-size:18px; }
 .userSummary span{ color:var(--muted); font-size:13px; }
+.restrictionsForm{
+  margin-top:12px;
+  gap:18px;
+}
+.restrictionsRow{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+  gap:16px;
+}
+.restrictionsActions{
+  display:flex;
+  justify-content:flex-end;
+}
+.restrictionsFeedback{
+  margin-top:10px;
+}
+.restrictionsTable{
+  width:100%;
+  border-collapse:collapse;
+  border-spacing:0;
+  margin-top:18px;
+}
+.restrictionsTable thead th{
+  text-align:center;
+  font-size:13px;
+  color:var(--muted);
+  padding:8px 10px;
+  border-bottom:1px solid var(--table-divider);
+}
+.restrictionsTable tbody td{
+  padding:12px 10px;
+  border-top:1px solid var(--table-divider);
+  border-bottom:1px solid var(--table-divider);
+  background:var(--panel);
+  text-align:center;
+}
+.restrictionsTable tbody tr:first-child td{
+  border-top:1px solid var(--table-divider);
+}
+.restrictionsTable tbody tr:last-child td{
+  border-bottom:1px solid var(--table-divider);
+}
+.restrictionsTable tbody tr{
+  transition:background .2s ease;
+}
+.restrictionsTable tbody tr:hover{
+  background:var(--nav-hover);
+}

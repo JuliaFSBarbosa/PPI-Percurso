@@ -3,9 +3,38 @@ from django.db.models import Sum, Count
 
 from accounts.models import User
 from logistics.models import (
-    Familia, Produto, Pedido, ProdutoPedido, 
-    Rota, RotaPedido, RotaTrajeto
+    Familia,
+    Pedido,
+    PedidoRestricaoGrupo,
+    Produto,
+    ProdutoPedido,
+    RestricaoFamilia,
+    Rota,
+    RotaPedido,
+    RotaTrajeto,
 )
+from logistics.services.restricoes import (
+    analisar_restricoes_para_itens_payload,
+    aplicar_restricoes_no_pedido,
+    normalizar_payload_pedidos,
+    validar_novos_vinculos_em_rota,
+)
+
+
+def _montar_alerta_restricao(pedido: Pedido):
+    grupos = (
+        pedido.grupos_restricao.filter(ativo=True)
+        .prefetch_related("familias")
+        .order_by("titulo")
+    )
+    grupos = list(grupos)
+    if not grupos:
+        return None
+    partes = []
+    for grupo in grupos:
+        nomes = ", ".join(grupo.familias.values_list("nome", flat=True))
+        partes.append(f"{grupo.titulo}: {nomes or 'sem famílias definidas'}")
+    return "Pedido repartido por restrições de família -> " + " | ".join(partes)
 
 
 # =============================================================================
@@ -32,6 +61,38 @@ class FamiliaSerializer(serializers.ModelSerializer):
         - Retorna: número inteiro com a contagem
         """
         return obj.produtos.filter(ativo=True).count()
+
+
+class RestricaoFamiliaSerializer(serializers.ModelSerializer):
+    familia_origem = FamiliaSerializer(read_only=True)
+    familia_restrita = FamiliaSerializer(read_only=True)
+    familia_origem_id = serializers.IntegerField(write_only=True)
+    familia_restrita_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = RestricaoFamilia
+        fields = [
+            "id",
+            "familia_origem",
+            "familia_origem_id",
+            "familia_restrita",
+            "familia_restrita_id",
+            "motivo",
+            "ativo",
+            "created_at",
+        ]
+
+
+class PedidoRestricaoGrupoSerializer(serializers.ModelSerializer):
+    familias = FamiliaSerializer(many=True, read_only=True)
+    total_itens = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PedidoRestricaoGrupo
+        fields = ["id", "titulo", "ativo", "familias", "total_itens", "created_at"]
+
+    def get_total_itens(self, obj):
+        return obj.itens.count()
 
 
 class ProdutoSerializer(serializers.ModelSerializer):
@@ -66,7 +127,7 @@ class ProdutoSimpleSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Produto
-        fields = ['id', 'nome', 'peso', 'volume', 'familia_nome']
+        fields = ['id', 'nome', 'peso', 'volume', 'familia_nome', 'familia_id']
 
 
 # =============================================================================
@@ -82,11 +143,19 @@ class ProdutoPedidoSerializer(serializers.ModelSerializer):
     """
     produto = ProdutoSimpleSerializer(read_only=True)
     produto_id = serializers.IntegerField(write_only=True)
+    grupo_restricao = PedidoRestricaoGrupoSerializer(read_only=True)
     peso_total = serializers.SerializerMethodField()
     
     class Meta:
         model = ProdutoPedido
-        fields = ['id', 'produto', 'produto_id', 'quantidade', 'peso_total']
+        fields = [
+            'id',
+            'produto',
+            'produto_id',
+            'quantidade',
+            'peso_total',
+            'grupo_restricao',
+        ]
     
     def get_peso_total(self, obj):
         """
@@ -123,19 +192,21 @@ class PedidoSerializer(serializers.ModelSerializer):
     usuario_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 
     itens = ProdutoPedidoSerializer(many=True, read_only=True)
+    grupos_restricao = PedidoRestricaoGrupoSerializer(many=True, read_only=True)
 
     peso_total = serializers.SerializerMethodField()
     volume_total = serializers.SerializerMethodField()
     total_itens = serializers.SerializerMethodField()
     distancia_km = serializers.SerializerMethodField()
     rotas = serializers.SerializerMethodField()
+    restricao_alerta = serializers.SerializerMethodField()
 
     class Meta:
         model = Pedido
         fields = [
             'id', 'usuario', 'usuario_id', 'cliente', 'cidade', 'nf', 'observacao', 'dtpedido',
-            'latitude', 'longitude', 'created_at', 'itens', 'peso_total',
-            'volume_total', 'total_itens', 'distancia_km', 'rotas'
+            'latitude', 'longitude', 'created_at', 'itens', 'grupos_restricao', 'peso_total',
+            'volume_total', 'total_itens', 'distancia_km', 'rotas', 'restricao_alerta'
         ]
 
     def get_peso_total(self, obj):
@@ -166,10 +237,17 @@ class PedidoSerializer(serializers.ModelSerializer):
             {
                 "id": rp.rota.id,
                 "status": rp.rota.status,
-                "data_rota": rp.rota.data_rota
+                "data_rota": rp.rota.data_rota,
+                "grupo_restricao_id": rp.grupo_restricao_id,
             }
             for rp in rels
         ]
+
+    def get_restricao_alerta(self, obj):
+        alerta = getattr(obj, "_restricao_msg", None)
+        if alerta:
+            return alerta
+        return _montar_alerta_restricao(obj)
 
 
 class PedidoSimpleSerializer(serializers.ModelSerializer):
@@ -211,12 +289,14 @@ class RotaPedidoSerializer(serializers.ModelSerializer):
     """
     pedido = PedidoSimpleSerializer(read_only=True)
     pedido_id = serializers.IntegerField(write_only=True)
+    grupo_restricao = PedidoRestricaoGrupoSerializer(read_only=True)
+    grupo_restricao_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     
     class Meta:
         model = RotaPedido
         fields = [
-            'id', 'pedido', 'pedido_id', 'ordem_entrega', 
-            'entregue', 'data_entrega'
+            'id', 'pedido', 'pedido_id', 'grupo_restricao', 'grupo_restricao_id',
+            'ordem_entrega', 'entregue', 'data_entrega'
         ]
 
 
@@ -300,12 +380,13 @@ class PedidoCreateSerializer(serializers.ModelSerializer):
     """
     # write_only: itens só são enviados na criação, não aparecem na resposta
     itens = ProdutoPedidoSerializer(many=True, write_only=True)
+    restricao_alerta = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = Pedido
         fields = [
             'usuario_id', 'cliente', 'cidade', 'nf', 'observacao', 'dtpedido',
-            'latitude', 'longitude', 'itens'
+            'latitude', 'longitude', 'itens', 'restricao_alerta'
         ]
 
     def validate_nf(self, value):
@@ -319,6 +400,27 @@ class PedidoCreateSerializer(serializers.ModelSerializer):
         if qs.exists():
             raise serializers.ValidationError('Nota Fiscal já cadastrada no sistema, verifique o número digitado!')
         return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        itens_data = attrs.get('itens') or []
+        analise = analisar_restricoes_para_itens_payload(itens_data)
+        self._analise_restricoes = analise
+        if analise.get("possui_conflito") and not self.context.get("allow_family_conflicts"):
+            raise serializers.ValidationError(
+                {
+                    "code": "familias_incompativeis",
+                    "detail": analise.get("mensagem") or "Pedido possui produtos de famílias incompatíveis.",
+                    "conflitos": analise.get("conflitos") or [],
+                    "grupos": analise.get("grupos") or [],
+                    "pode_dividir": True,
+                }
+            )
+        return attrs
+
+    @property
+    def analise_restricoes(self):
+        return getattr(self, "_analise_restricoes", None)
     
     def create(self, validated_data):
         """
@@ -340,7 +442,9 @@ class PedidoCreateSerializer(serializers.ModelSerializer):
                 produto_id=item_data['produto_id'],
                 quantidade=item_data['quantidade']
             )
-        
+        resultado = aplicar_restricoes_no_pedido(pedido)
+        if resultado.get("mensagem"):
+            pedido._restricao_msg = resultado["mensagem"]
         return pedido
 
     def update(self, instance, validated_data):
@@ -361,7 +465,16 @@ class PedidoCreateSerializer(serializers.ModelSerializer):
                     produto_id=item_data['produto_id'],
                     quantidade=item_data['quantidade']
                 )
+        resultado = aplicar_restricoes_no_pedido(instance)
+        if resultado.get("mensagem"):
+            instance._restricao_msg = resultado["mensagem"]
         return instance
+
+    def get_restricao_alerta(self, obj):
+        alerta = getattr(obj, "_restricao_msg", None)
+        if alerta:
+            return alerta
+        return _montar_alerta_restricao(obj)
 
 
 class RotaCreateSerializer(serializers.ModelSerializer):
@@ -373,7 +486,7 @@ class RotaCreateSerializer(serializers.ModelSerializer):
     """
     # ListField: aceita uma lista de números inteiros (IDs dos pedidos)
     pedidos_ids = serializers.ListField(
-        child=serializers.IntegerField(),
+        child=serializers.JSONField(),
         write_only=True,
         required=False  # Rota pode ser criada vazia e pedidos adicionados depois
     )
@@ -390,16 +503,37 @@ class RotaCreateSerializer(serializers.ModelSerializer):
         - enumerate(lista, 1): gera números sequenciais começando em 1
         - Cria automaticamente a ordem de entrega baseada na sequência
         """
-        pedidos_ids = validated_data.pop('pedidos_ids', [])
-        
-        # Cria a rota principal
+        pedidos_payload = validated_data.pop('pedidos_ids', [])
+        pedidos_normalizados = normalizar_payload_pedidos(pedidos_payload)
+
+        vinculos = []
+        for entry in pedidos_normalizados:
+            pedido_id = entry["pedido_id"]
+            try:
+                pedido = Pedido.objects.get(pk=pedido_id)
+            except Pedido.DoesNotExist as exc:
+                raise serializers.ValidationError(f"Pedido {pedido_id} não encontrado.") from exc
+            grupo = None
+            grupo_id = entry.get("grupo_restricao_id")
+            if grupo_id:
+                try:
+                    grupo = PedidoRestricaoGrupo.objects.get(pk=grupo_id, pedido=pedido)
+                except PedidoRestricaoGrupo.DoesNotExist as exc:
+                    raise serializers.ValidationError("Grupo informado não pertence ao pedido selecionado.") from exc
+            elif pedido.grupos_restricao.filter(ativo=True).exists():
+                raise serializers.ValidationError(
+                    f"Pedido {pedido.id} está repartido em grupos. Informe o grupo para roteirização."
+                )
+            vinculos.append((pedido, grupo))
+
+        validar_novos_vinculos_em_rota(vinculos)
+
         rota = Rota.objects.create(**validated_data)
-        
-        # Adiciona cada pedido à rota com ordem sequencial
-        for ordem, pedido_id in enumerate(pedidos_ids, 1):
+        for ordem, (pedido, grupo) in enumerate(vinculos, 1):
             RotaPedido.objects.create(
                 rota=rota,
-                pedido_id=pedido_id,
+                pedido=pedido,
+                grupo_restricao=grupo,
                 ordem_entrega=ordem
             )
         

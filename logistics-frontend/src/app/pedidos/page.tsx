@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState, ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, ChangeEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Inter as InterFont } from "next/font/google";
 import { useSession, signOut } from "next-auth/react";
@@ -25,6 +25,21 @@ const MapLocationPicker = dynamic(
 );
 
 const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+const buildFamiliaPairKey = (a: number, b: number) => {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return "";
+  return a < b ? `${a}:${b}` : `${b}:${a}`;
+};
+const extractFamiliesFromPedido = (pedido: any): number[] => {
+  const itens = Array.isArray(pedido?.itens) ? pedido.itens : [];
+  const familias = new Set<number>();
+  itens.forEach((item: any) => {
+    const familiaId = Number(
+      item?.familia_id ?? item?.familia?.id ?? item?.produto?.familia_id ?? item?.produto?.familia?.id
+    );
+    if (Number.isFinite(familiaId)) familias.add(familiaId);
+  });
+  return Array.from(familias);
+};
 const formatDateBR = (value: any) => {
   if (!value) return "-";
   const asString = String(value).trim();
@@ -109,11 +124,15 @@ export default function PedidosPage() {
   const [showDepositoMap, setShowDepositoMap] = useState(false);
   const selectionSectionRef = useRef<HTMLDivElement | null>(null);
   const [basePedidoId, setBasePedidoId] = useState<number | null>(null);
-  const [raioKm, setRaioKm] = useState(RAIO_OPTIONS[0]);
-  const [aplicandoRaio, setAplicandoRaio] = useState(false);
-  const [raioErro, setRaioErro] = useState<string | null>(null);
-  const [raioInfo, setRaioInfo] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
+const [raioKm, setRaioKm] = useState(RAIO_OPTIONS[0]);
+const [aplicandoRaio, setAplicandoRaio] = useState(false);
+const [raioErro, setRaioErro] = useState<string | null>(null);
+const [raioInfo, setRaioInfo] = useState<string | null>(null);
+const [loadingMore, setLoadingMore] = useState(false);
+const [restricoesFamilias, setRestricoesFamilias] = useState<RestricaoFamilia[]>([]);
+const [carregandoRestricoes, setCarregandoRestricoes] = useState(false);
+const [restricoesErro, setRestricoesErro] = useState<string | null>(null);
+const [familiaAlert, setFamiliaAlert] = useState<string | null>(null);
 
   const handleDepositoChange = (field: "latitude" | "longitude") => (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -132,7 +151,7 @@ export default function PedidosPage() {
     }
     setAplicandoRaio(true);
     setRaioErro(null);
-     setRaioInfo(null);
+    setRaioInfo(null);
     try {
       const resp = await fetch(
         `/api/proxy/pedidos?pedido_base=${basePedidoId}&raio_km=${raioKm}&limit=500`,
@@ -159,13 +178,43 @@ export default function PedidosPage() {
         });
         return Array.from(map.values());
       });
-      const novosIds = proximosValidos
-        .map((pedido: any) => normalizeId(pedido.id))
-        .filter((id) => Number.isFinite(id));
-      const baseIdNormalized = Number.isFinite(basePedidoId ?? NaN) ? Number(basePedidoId) : null;
-      const selecionadosAtualizados = [...new Set([...(baseIdNormalized ? [baseIdNormalized] : []), ...novosIds])];
+      const familiasExtras = new Map<number, number[]>();
+      const listaAtual = [...selectedIds];
+      const idsAdicionados: number[] = [];
+      const rejeitadosRestricao: number[] = [];
+
+      const conflitosDetectados: string[] = [];
+      proximosValidos.forEach((pedido: any) => {
+        const idNorm = normalizeId(pedido.id);
+        if (!Number.isFinite(idNorm)) return;
+        const familiasPedido = extractFamiliesFromPedido(pedido);
+        familiasExtras.set(idNorm, familiasPedido);
+        const conflito = encontrarConflitoComLista(familiasPedido, listaAtual, familiasExtras);
+        if (conflito !== null) {
+          rejeitadosRestricao.push(idNorm);
+          conflitosDetectados.push(
+            buildConflictMessage(idNorm, conflito.pedidoId, familiasPedido, conflito.familias)
+          );
+          return;
+        }
+        listaAtual.push(idNorm);
+        idsAdicionados.push(idNorm);
+      });
+
+      const selecionadosAtualizados = Array.from(new Set(listaAtual));
       setSelectedIds(selecionadosAtualizados);
-      setRaioInfo(`Encontrados ${proximosValidos.length} pedidos em até ${raioKm} km do pedido ${basePedidoId}.`);
+      setRaioInfo(
+        `Encontrados ${proximosValidos.length} pedidos em até ${raioKm} km do pedido ${basePedidoId}. Adicionados ${idsAdicionados.length}.`
+      );
+      if (rejeitadosRestricao.length > 0) {
+        setFamiliaAlert(
+          conflitosDetectados.length > 0
+            ? conflitosDetectados.join(" ")
+            : `Ignoramos os pedidos ${rejeitadosRestricao.join(", ")} porque conflitam com outras notas selecionadas.`
+        );
+      } else {
+        setFamiliaAlert(null);
+      }
     } catch (err) {
       setRaioErro(err instanceof Error ? err.message : "Não foi possível aplicar o raio.");
     } finally {
@@ -293,6 +342,32 @@ export default function PedidosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const loadRestricoes = async () => {
+      setCarregandoRestricoes(true);
+      setRestricoesErro(null);
+      try {
+        const resp = await fetch("/api/proxy/restricoes-familias?ativo=true&limit=500", { cache: "no-store" });
+        const raw = await resp.text();
+        if (!resp.ok) throw new Error(parseApiError(raw, "Falha ao carregar restrições de famílias.", resp.status));
+        const parsed = JSON.parse(raw) as API<APIGetRestricoesFamiliasResponse>;
+        if (!parsed.success) throw new Error(parsed.detail || "Erro ao carregar restrições de famílias.");
+        if (!active) return;
+        setRestricoesFamilias(parsed.data?.results ?? []);
+      } catch (err) {
+        if (!active) return;
+        setRestricoesErro(err instanceof Error ? err.message : "Não foi possível validar restrições de famílias.");
+      } finally {
+        if (active) setCarregandoRestricoes(false);
+      }
+    };
+    loadRestricoes();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const pedidosWithTotals = useMemo<PedidoEnriquecido[]>(() => {
     return pedidos.map((pedido) => {
       const itens = Array.isArray(pedido.itens) ? pedido.itens : [];
@@ -337,6 +412,96 @@ export default function PedidosPage() {
       return { ...pedido, _totalItens: totalItens, _pesoTotal: pesoTotal, _volumeTotal: volumeTotal, cidade, rota };
     });
   }, [pedidos]);
+  const restricaoPairs = useMemo(() => {
+    const pairs = new Set<string>();
+    restricoesFamilias.forEach((r) => {
+      const origem = Number(r.familia_origem?.id);
+      const destino = Number(r.familia_restrita?.id);
+      const key = buildFamiliaPairKey(origem, destino);
+      if (key) pairs.add(key);
+    });
+    return pairs;
+  }, [restricoesFamilias]);
+
+  const restricaoDetalhes = useMemo(() => {
+    const mapa = new Map<string, RestricaoFamilia>();
+    restricoesFamilias.forEach((r) => {
+      const origem = Number(r.familia_origem?.id);
+      const destino = Number(r.familia_restrita?.id);
+      const key = buildFamiliaPairKey(origem, destino);
+      if (key) mapa.set(key, r);
+    });
+    return mapa;
+  }, [restricoesFamilias]);
+
+  const pedidoFamiliasMap = useMemo(() => {
+    const map = new Map<number, number[]>();
+    pedidosWithTotals.forEach((pedido) => {
+      map.set(pedido.id, extractFamiliesFromPedido(pedido));
+    });
+    return map;
+  }, [pedidosWithTotals]);
+
+  const hasConflictBetweenFamilias = useCallback(
+    (familiasA?: number[], familiasB?: number[]): boolean => {
+      if (!familiasA?.length || !familiasB?.length) return false;
+      for (const fa of familiasA) {
+        for (const fb of familiasB) {
+          const key = buildFamiliaPairKey(fa, fb);
+          if (key && restricaoPairs.has(key)) return true;
+        }
+      }
+      return false;
+    },
+    [restricaoPairs]
+  );
+
+  const descreverConflitoFamilias = useCallback(
+    (familiasA?: number[], familiasB?: number[]): string | null => {
+      if (!familiasA?.length || !familiasB?.length) return null;
+      for (const fa of familiasA) {
+        for (const fb of familiasB) {
+          const key = buildFamiliaPairKey(fa, fb);
+          if (key && restricaoDetalhes.has(key)) {
+            const restricao = restricaoDetalhes.get(key)!;
+            const origemNome = restricao.familia_origem?.nome ?? restricao.familia_origem?.descricao ?? "Família A";
+            const destinoNome = restricao.familia_restrita?.nome ?? restricao.familia_restrita?.descricao ?? "Família B";
+            return `${origemNome} × ${destinoNome}`;
+          }
+        }
+      }
+      return null;
+    },
+    [restricaoDetalhes]
+  );
+
+  const encontrarConflitoComLista = useCallback(
+    (
+      familiasNovo: number[],
+      listaIds: number[],
+      extras?: Map<number, number[]>
+    ): { pedidoId: number; familias: number[] } | null => {
+      for (const id of listaIds) {
+        const familiasExistente = extras?.get(id) ?? pedidoFamiliasMap.get(id) ?? [];
+        if (hasConflictBetweenFamilias(familiasNovo, familiasExistente)) {
+          return { pedidoId: id, familias: familiasExistente };
+        }
+      }
+      return null;
+    },
+    [pedidoFamiliasMap, hasConflictBetweenFamilias]
+  );
+
+  const buildConflictMessage = useCallback(
+    (pedidoId: number, outroId: number, familiasPedido: number[], familiasOutro: number[]) => {
+      const descricao = descreverConflitoFamilias(familiasPedido, familiasOutro);
+      if (descricao) {
+        return `Pedido #${pedidoId} não pode ser combinado com o pedido #${outroId} (${descricao}).`;
+      }
+      return `Pedido #${pedidoId} conflita com o pedido #${outroId} (famílias incompatíveis).`;
+    },
+    [descreverConflitoFamilias]
+  );
 
   const sortedPedidos = useMemo<PedidoEnriquecido[]>(() => {
     const sorted = [...pedidosWithTotals];
@@ -401,18 +566,110 @@ export default function PedidosPage() {
     (p) => selectedIds.includes(p.id) && !isPedidoEntregue(p) && !isPedidoEmRotaAtiva(p)
   );
 
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      const filtrados = prev.filter((id) => {
+  const handleToggleSelect = useCallback(
+    (id: number, checked: boolean) => {
+      let alertMsg: string | null | undefined = null;
+      setSelectedIds((prev) => {
+        if (!checked) {
+          alertMsg = null;
+          return prev.filter((p) => p !== id);
+        }
+        if (prev.includes(id)) {
+          alertMsg = null;
+          return prev;
+        }
         const pedido = pedidosWithTotals.find((p) => p.id === id);
-        return pedido && !isPedidoEntregue(pedido) && !isPedidoEmRotaAtiva(pedido);
+        if (!pedido || isPedidoEntregue(pedido) || isPedidoEmRotaAtiva(pedido)) {
+          alertMsg = "Pedido indisponível para roteirização.";
+          return prev;
+        }
+        const familiasPedido = pedidoFamiliasMap.get(id) ?? [];
+        const conflito = encontrarConflitoComLista(familiasPedido, prev);
+        if (conflito !== null) {
+          alertMsg = buildConflictMessage(id, conflito.pedidoId, familiasPedido, conflito.familias);
+          return prev;
+        }
+        alertMsg = null;
+        return [...prev, id];
       });
-      if (filtrados.length !== prev.length) {
-        setInfo("Removemos pedidos que já fazem parte de outra rota.");
-      }
-      return filtrados;
+      setFamiliaAlert(alertMsg ?? null);
+    },
+    [pedidosWithTotals, pedidoFamiliasMap, encontrarConflitoComLista, buildConflictMessage]
+  );
+
+  const handleToggleSelectAll = useCallback(
+    (checked: boolean) => {
+      let alertMsg: string | null | undefined = null;
+      setSelectedIds((prev) => {
+        const restantes = prev.filter((id) => !displayedPedidos.some((pedido) => pedido.id === id));
+        if (!checked) {
+          alertMsg = null;
+          return restantes;
+        }
+        let acumulados = [...restantes];
+        const rejeitados: number[] = [];
+        displayedPedidos.forEach((pedido) => {
+          if (isPedidoEntregue(pedido) || isPedidoEmRotaAtiva(pedido)) {
+            return;
+          }
+          const familiasPedido = pedidoFamiliasMap.get(pedido.id) ?? [];
+          const conflito = encontrarConflitoComLista(familiasPedido, acumulados);
+          if (conflito !== null) {
+            rejeitados.push(
+              buildConflictMessage(pedido.id, conflito.pedidoId, familiasPedido, conflito.familias) ||
+                `#${pedido.id}`
+            );
+            return;
+          }
+          acumulados.push(pedido.id);
+        });
+        if (rejeitados.length > 0) {
+          alertMsg =
+            rejeitados.length === 1
+              ? rejeitados[0]
+              : `Alguns pedidos foram ignorados por restrições: ${rejeitados.join("; ")}`;
+        } else {
+          alertMsg = null;
+        }
+        return acumulados;
+      });
+      setFamiliaAlert(alertMsg ?? null);
+    },
+    [displayedPedidos, pedidoFamiliasMap, encontrarConflitoComLista, buildConflictMessage]
+  );
+
+  useEffect(() => {
+    let remocaoPorRotas = false;
+    let remocaoPorRestricao = false;
+    let conflitoMsg: string | null = null;
+    setSelectedIds((prev) => {
+      const atualizados: number[] = [];
+      prev.forEach((id) => {
+        const pedido = pedidosWithTotals.find((p) => p.id === id);
+        if (!pedido || isPedidoEntregue(pedido) || isPedidoEmRotaAtiva(pedido)) {
+          remocaoPorRotas = true;
+          return;
+        }
+        const familiasPedido = pedidoFamiliasMap.get(id) ?? [];
+        const conflito = encontrarConflitoComLista(familiasPedido, atualizados);
+        if (conflito !== null) {
+          remocaoPorRestricao = true;
+          if (!conflitoMsg) {
+            conflitoMsg = buildConflictMessage(id, conflito.pedidoId, familiasPedido, conflito.familias);
+          }
+          return;
+        }
+        atualizados.push(id);
+      });
+      return atualizados;
     });
-  }, [pedidosWithTotals]);
+    if (remocaoPorRestricao) {
+      setFamiliaAlert(conflitoMsg || "Ajustamos os pedidos selecionados para respeitar restrições de famílias.");
+    }
+    if (remocaoPorRotas) {
+      setInfo("Removemos pedidos que já fazem parte de outra rota.");
+    }
+  }, [pedidosWithTotals, pedidoFamiliasMap, encontrarConflitoComLista, buildConflictMessage]);
 
   useEffect(() => {
     if (selectedIds.length === 0) {
@@ -676,10 +933,8 @@ export default function PedidosPage() {
         <OrdersTable
           pedidos={displayedPedidos}
           selectedIds={selectedIds}
-          onToggleSelect={(id, checked) =>
-            setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((p) => p !== id)))
-          }
-          onToggleSelectAll={(checked) => setSelectedIds(checked ? displayedPedidos.map((p) => p.id) : [])}
+          onToggleSelect={handleToggleSelect}
+          onToggleSelectAll={handleToggleSelectAll}
           onEdit={(id) => router.push(`/entregas/${id}/editar`)}
           onDelete={handleDelete}
           deletingId={deletingId}
@@ -696,6 +951,9 @@ export default function PedidosPage() {
             onNext: () => handleChangePage(displayPage + 1),
           }}
         />
+        {carregandoRestricoes && <p className={styles.muted}>Validando restrições de famílias...</p>}
+        {restricoesErro && <p className={styles.muted}>{restricoesErro}</p>}
+        {familiaAlert && <p className={styles.muted}>{familiaAlert}</p>}
 
         {error && <p className={styles.muted}>{error}</p>}
         {!error && info && <p className={styles.muted}>{info}</p>}

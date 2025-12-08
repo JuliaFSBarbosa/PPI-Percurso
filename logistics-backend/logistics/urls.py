@@ -17,6 +17,7 @@ from .views import (
     PedidoViewSet,
     ProdutoViewSet,
     RemoverPedidoRotaView,
+    RestricaoFamiliaViewSet,
     RotaCreateViewSet,
     RotaViewSet,
 )
@@ -28,6 +29,7 @@ router.register(r"familias", FamiliaViewSet, basename="familia")
 router.register(r"produtos", ProdutoViewSet, basename="produto")
 router.register(r"pedidos", PedidoViewSet, basename="pedido")
 router.register(r"rotas", RotaViewSet, basename="rota")
+router.register(r"restricoes-familias", RestricaoFamiliaViewSet, basename="restricao-familia")
 
 # ViewSets de escrita (Admin)
 router.register(r"familias-admin", FamiliaViewSet, basename="familia-admin")

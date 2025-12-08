@@ -65,6 +65,32 @@ class Pedido(models.Model):
         ordering = ["-created_at"]
 
 
+class PedidoRestricaoGrupo(models.Model):
+    """
+    Representa uma reparticao logica de um pedido para atender as restricoes
+    de familias incompatíveis.
+    """
+
+    pedido = models.ForeignKey(
+        Pedido,
+        related_name="grupos_restricao",
+        on_delete=models.CASCADE,
+    )
+    titulo = models.CharField(max_length=100)
+    ativo = models.BooleanField(default=True)
+    familias = models.ManyToManyField(Familia, related_name="grupos_restricao", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.titulo} - Pedido {self.pedido_id}"
+
+    class Meta:
+        verbose_name = "Grupo do Pedido"
+        verbose_name_plural = "Grupos de Pedidos"
+        ordering = ["pedido_id", "titulo"]
+
+
 class ProdutoPedido(models.Model):
     produto = models.ForeignKey(
         Produto,
@@ -77,6 +103,13 @@ class ProdutoPedido(models.Model):
         on_delete=models.CASCADE,
     )
     quantidade = models.PositiveIntegerField()
+    grupo_restricao = models.ForeignKey(
+        PedidoRestricaoGrupo,
+        related_name="itens",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
 
     def __str__(self):
         return f"{self.produto.nome} - Pedido {self.pedido.id}"
@@ -137,6 +170,13 @@ class RotaPedido(models.Model):
         related_name="rotas",
         on_delete=models.CASCADE,
     )
+    grupo_restricao = models.ForeignKey(
+        PedidoRestricaoGrupo,
+        related_name="rotas",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
     ordem_entrega = models.PositiveIntegerField(verbose_name="Ordem de Entrega")
     entregue = models.BooleanField(default=False)
     data_entrega = models.DateTimeField(null=True, blank=True)
@@ -145,7 +185,7 @@ class RotaPedido(models.Model):
         return f"Rota {self.rota.id} - Pedido {self.pedido.id} (Ordem: {self.ordem_entrega})"
 
     class Meta:
-        unique_together = ("rota", "pedido")
+        unique_together = ("rota", "pedido", "grupo_restricao")
         verbose_name = "Pedido da Rota"
         verbose_name_plural = "Pedidos das Rotas"
         ordering = ["rota", "ordem_entrega"]
@@ -195,6 +235,7 @@ class RestricaoFamilia(models.Model):
         help_text="Motivo da incompatibilidade",
     )
     ativo = models.BooleanField(default=True)
+    chave_bidirecional = models.CharField(max_length=120, editable=False, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -203,14 +244,29 @@ class RestricaoFamilia(models.Model):
     class Meta:
         verbose_name = "Restricao de Familia"
         verbose_name_plural = "Restricoes de Familias"
-        unique_together = ("familia_origem", "familia_restrita")
         ordering = ["familia_origem__nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["chave_bidirecional"],
+                name="uniq_restricao_familia_bidirecional",
+            ),
+        ]
 
     def clean(self):
         """Validacao customizada."""
         if self.familia_origem == self.familia_restrita:
             raise ValidationError("Uma familia nao pode ser incompativel com ela mesma.")
+        if self.familia_origem_id and self.familia_restrita_id:
+            ids = sorted([self.familia_origem_id, self.familia_restrita_id])
+            chave = f"{ids[0]}:{ids[1]}"
+            conflito = RestricaoFamilia.objects.exclude(pk=self.pk).filter(chave_bidirecional=chave).exists()
+            if conflito:
+                raise ValidationError("Essa restricao ja foi cadastrada.")
+            self.chave_bidirecional = chave
 
     def save(self, *args, **kwargs):
+        if self.familia_origem_id and self.familia_restrita_id:
+            ids = sorted([self.familia_origem_id, self.familia_restrita_id])
+            self.chave_bidirecional = f"{ids[0]}:{ids[1]}"
         self.full_clean()
         super().save(*args, **kwargs)

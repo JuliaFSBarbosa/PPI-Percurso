@@ -26,6 +26,7 @@ type ProdutoSimple = {
     nome: string;
     peso: number;
     volume: number | null;
+    familia_id: number;
     familia_nome: string;
 }
 
@@ -62,6 +63,28 @@ type Pedido = {
         data_rota: string;
     }[];
 }
+
+type PedidoRestricaoGrupoSugestao = {
+    indice: number;
+    titulo: string;
+    familias: string[];
+    total_itens: number;
+    itens: {
+        produto_id: number;
+        produto_nome: string;
+        quantidade: number;
+        familia_nome: string;
+    }[];
+};
+
+type APIDividirPedidoResponse = {
+    dividido: boolean;
+    total_grupos: number;
+    pedidos: Pedido[];
+    mensagem: string;
+    nf: number;
+    success?: boolean;
+};
 
 type PedidoSimple = {
     id: number;
@@ -130,6 +153,22 @@ type APIGetProdutoResponse = Produto;
 
 type APIGetProdutosResponse = {
     results: Produto[];
+    count: number;
+    next: string | null;
+    previous: string | null;
+}
+
+type RestricaoFamilia = {
+    id: number;
+    familia_origem: Familia;
+    familia_restrita: Familia;
+    motivo: string | null;
+    ativo: boolean;
+    created_at: string;
+}
+
+type APIGetRestricoesFamiliasResponse = {
+    results: RestricaoFamilia[];
     count: number;
     next: string | null;
     previous: string | null;

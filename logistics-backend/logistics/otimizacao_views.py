@@ -1,6 +1,7 @@
 import logging
 import math
 
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -10,8 +11,9 @@ from rest_framework.views import APIView
 
 from .ia.genetic_algorithm import otimizar_rota_pedidos
 from .constants import DEFAULT_DEPOSITO
-from .models import Pedido, Rota, RotaPedido
+from .models import Pedido, PedidoRestricaoGrupo, Rota, RotaPedido
 from .relatorios import gerar_relatorio_rota_pdf
+from .services.restricoes import normalizar_payload_pedidos, validar_novos_vinculos_em_rota
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +122,7 @@ class SalvarRotaOtimizadaView(APIView):
         try:
             data_rota = request.data.get("data_rota")
             capacidade_max = request.data.get("capacidade_max")
-            pedidos_ordem = request.data.get("pedidos_ordem", [])
+            pedidos_payload = request.data.get("pedidos_ordem", [])
             distancia_total = request.data.get("distancia_total")
 
             logger.info(
@@ -131,9 +133,51 @@ class SalvarRotaOtimizadaView(APIView):
                 distancia_total,
             )
 
-            if not data_rota or not capacidade_max or not pedidos_ordem:
+            if not data_rota or not capacidade_max or not pedidos_payload:
                 return Response(
                     {"error": "Dados obrigatorios faltando"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                pedidos_normalizados = normalizar_payload_pedidos(pedidos_payload)
+            except ValidationError as exc:
+                return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+            pedidos_ids = [entry["pedido_id"] for entry in pedidos_normalizados]
+            pedidos_map = {p.id: p for p in Pedido.objects.filter(id__in=pedidos_ids)}
+            if len(set(pedidos_ids)) != len(pedidos_map):
+                return Response(
+                    {"error": "Alguns pedidos nao foram encontrados"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            vinculos = []
+            for entry in pedidos_normalizados:
+                pedido = pedidos_map[entry["pedido_id"]]
+                grupo = None
+                grupo_id = entry.get("grupo_restricao_id")
+                if grupo_id:
+                    try:
+                        grupo = PedidoRestricaoGrupo.objects.get(pk=grupo_id, pedido=pedido)
+                    except PedidoRestricaoGrupo.DoesNotExist:
+                        return Response(
+                            {"error": f"Grupo inválido informado para o pedido {pedido.id}."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                elif pedido.grupos_restricao.filter(ativo=True).exists():
+                    return Response(
+                        {"error": f"Pedido {pedido.id} está repartido. Informe o grupo correto para roteirizar."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                vinculos.append((pedido, grupo))
+
+            try:
+                validar_novos_vinculos_em_rota(vinculos)
+            except ValidationError as exc:
+                mensagem = ", ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+                return Response(
+                    {"error": mensagem},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -143,11 +187,11 @@ class SalvarRotaOtimizadaView(APIView):
                 status="PLANEJADA",
             )
 
-            for ordem, pedido_id in enumerate(pedidos_ordem, 1):
-                pedido = get_object_or_404(Pedido, pk=pedido_id)
+            for ordem, (pedido, grupo) in enumerate(vinculos, 1):
                 RotaPedido.objects.create(
                     rota=rota,
                     pedido=pedido,
+                    grupo_restricao=grupo,
                     ordem_entrega=ordem,
                 )
 

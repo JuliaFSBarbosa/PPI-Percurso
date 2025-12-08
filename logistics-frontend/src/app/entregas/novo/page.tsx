@@ -21,6 +21,86 @@ const MapLocationPicker = dynamic(
 const inter = InterFont({ subsets: ["latin"] });
 
 type PedidoItem = { produtoId: string; quantidade: string };
+type CreatePedidoPayload = {
+  nf: number;
+  cliente: string;
+  cidade: string;
+  dtpedido: string;
+  observacao: string | null;
+  latitude: number;
+  longitude: number;
+  itens: { produto_id: number; quantidade: number }[];
+};
+
+type SplitSuggestion = {
+  message: string;
+  grupos: PedidoRestricaoGrupoSugestao[];
+  conflitos: string[];
+};
+
+const safeJsonParse = <T,>(raw: string): T | null => {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeToArray = <T,>(value: unknown): T[] => {
+  if (value === null || value === undefined) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => normalizeToArray<T>(entry as unknown));
+  }
+  return [value as T];
+};
+
+const hasSplitMarker = (obj: Record<string, unknown>): boolean => {
+  const codeList = normalizeToArray<string>(obj.code);
+  if (codeList.includes("familias_incompativeis")) return true;
+  const errorList = normalizeToArray<string>(obj.error);
+  if (errorList.includes("familias_incompativeis")) return true;
+  if (normalizeToArray<boolean>(obj.pode_dividir).includes(true)) return true;
+  return false;
+};
+
+const findSplitPayload = (value: unknown): any | null => {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = findSplitPayload(entry);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (hasSplitMarker(obj)) {
+      return obj;
+    }
+    for (const key of Object.keys(obj)) {
+      const found = findSplitPayload(obj[key]);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+const parseSplitSuggestion = (raw: any): SplitSuggestion | null => {
+  if (!raw) return null;
+  const payload = findSplitPayload(raw);
+  if (!payload) return null;
+  const message =
+    normalizeToArray<string>(
+      payload.detail ?? raw.detail ?? payload.message ?? raw.message ?? payload.non_field_errors ?? raw.non_field_errors
+    )[0] ?? "Pedido possui produtos de famílias incompatíveis. Divida os itens para prosseguir.";
+  const conflitos = normalizeToArray<string>(payload.conflitos ?? raw.conflitos);
+  const grupos = normalizeToArray<PedidoRestricaoGrupoSugestao>(payload.grupos ?? raw.grupos);
+  return {
+    message,
+    conflitos,
+    grupos,
+  };
+};
 
 export default function NovoPedidoPage() {
   const router = useRouter();
@@ -50,6 +130,9 @@ export default function NovoPedidoPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [splitSuggestion, setSplitSuggestion] = useState<SplitSuggestion | null>(null);
+  const [lastPayload, setLastPayload] = useState<CreatePedidoPayload | null>(null);
+  const [splitting, setSplitting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -92,9 +175,36 @@ export default function NovoPedidoPage() {
     }));
   };
 
+  const handleDividirPedido = async () => {
+    if (!lastPayload) return;
+    setError(null);
+    setSplitting(true);
+    try {
+      const resp = await fetch("/api/proxy/pedidos/dividir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lastPayload),
+      });
+      const text = await resp.text();
+      if (!resp.ok) {
+        throw new Error(parseApiError(text, "Não foi possível dividir o pedido.", resp.status));
+      }
+      const parsed = text ? safeJsonParse<APIDividirPedidoResponse>(text) : null;
+      if (parsed && parsed.dividido === false) {
+        throw new Error(parsed.mensagem || "Falha ao dividir o pedido.");
+      }
+      router.push("/pedidos");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao dividir o pedido.");
+    } finally {
+      setSplitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSplitSuggestion(null);
     const sanitizeNumber = (val: string) => {
       const n = Number(val.replace(",", "."));
       return Number.isNaN(n) ? null : n;
@@ -130,7 +240,7 @@ export default function NovoPedidoPage() {
 
     setSubmitting(true);
     try {
-      const payload = {
+      const payload: CreatePedidoPayload = {
         nf: Number(form.nf),
         cliente: form.cliente.trim(),
         cidade: form.cidade.trim(),
@@ -143,6 +253,7 @@ export default function NovoPedidoPage() {
           quantidade: Number(i.quantidade),
         })),
       };
+      setLastPayload(payload);
       const resp = await fetch("/api/proxy/pedidos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -150,6 +261,15 @@ export default function NovoPedidoPage() {
       });
       const text = await resp.text();
       if (!resp.ok) {
+        const parsedError = safeJsonParse<any>(text);
+        if (resp.status === 400 && parsedError) {
+          const suggestion = parseSplitSuggestion(parsedError);
+          if (suggestion) {
+            setSplitSuggestion(suggestion);
+            setError(suggestion.message);
+            return;
+          }
+        }
         throw new Error(parseApiError(text, "Falha ao cadastrar pedido.", resp.status));
       }
       if (text) {
@@ -354,8 +474,32 @@ export default function NovoPedidoPage() {
             </div>
 
             {error && <p className={styles.muted}>{error}</p>}
+            {splitSuggestion && (
+              <div className={styles.splitAlert} role="alert">
+                <div>
+                  <strong>{splitSuggestion.message}</strong>
+                  {splitSuggestion.conflitos.length > 0 && (
+                    <p className={styles.splitDetails}>
+                      Conflitos: {splitSuggestion.conflitos.join(", ")}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.primary}`}
+                  onClick={handleDividirPedido}
+                  disabled={!lastPayload || splitting}
+                >
+                  {splitting ? "Dividindo..." : "Dividir pedido"}
+                </button>
+              </div>
+            )}
             <div className={styles["quick-actions"]}>
-              <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={submitting}>
+              <button
+                type="submit"
+                className={`${styles.btn} ${styles.primary}`}
+                disabled={submitting || splitting}
+              >
                 {submitting ? "Salvando..." : "Salvar"}
               </button>
             </div>

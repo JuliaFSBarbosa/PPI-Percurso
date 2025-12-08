@@ -2,6 +2,7 @@
 from datetime import datetime
 import io
 
+from django.core.exceptions import ValidationError
 from django.db.models import Max, Sum, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -14,6 +15,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,14 +23,22 @@ from rest_framework.views import APIView
 from .filters import FamiliaFilter, PedidoFilter, ProdutoFilter
 from .ia.genetic_algorithm import calcular_distancia, otimizar_rota_pedidos
 from .constants import DEFAULT_DEPOSITO
-from .models import Familia, Pedido, Produto, Rota, RotaPedido
+from .models import Familia, Pedido, PedidoRestricaoGrupo, Produto, RestricaoFamilia, Rota, RotaPedido
 from .serializers import (
     FamiliaSerializer,
     PedidoCreateSerializer,
     PedidoSerializer,
     ProdutoSerializer,
+    RestricaoFamiliaSerializer,
     RotaCreateSerializer,
     RotaSerializer,
+)
+from .services.restricoes import (
+    analisar_restricoes_para_itens_payload,
+    coletar_familias_da_rota,
+    dividir_pedido_validado,
+    normalizar_payload_pedidos,
+    validar_novos_vinculos_em_rota,
 )
 
 
@@ -44,6 +54,15 @@ class FamiliaViewSet(viewsets.ModelViewSet):
     filterset_class = FamiliaFilter
     ordering_fields = ["nome", "created_at"]
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
+
+
+class RestricaoFamiliaViewSet(viewsets.ModelViewSet):
+    queryset = RestricaoFamilia.objects.select_related("familia_origem", "familia_restrita").order_by("familia_origem__nome")
+    serializer_class = RestricaoFamiliaSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["ativo", "familia_origem", "familia_restrita"]
+    http_method_names = ["get", "post", "delete", "patch", "head", "options"]
 
 
 # ====================================================
@@ -83,6 +102,31 @@ class PedidoCreateViewSet(viewsets.ModelViewSet):
     queryset = Pedido.objects.all()
     serializer_class = PedidoCreateSerializer
 
+    @action(detail=False, methods=["post"], url_path="dividir")
+    def dividir(self, request, *args, **kwargs):
+        context = {**self.get_serializer_context(), "allow_family_conflicts": True}
+        serializer = self.get_serializer(data=request.data, context=context)
+        serializer.is_valid(raise_exception=True)
+        analise = serializer.analise_restricoes or analisar_restricoes_para_itens_payload(serializer.validated_data.get("itens") or [])
+        if not analise.get("possui_conflito"):
+            return Response(
+                {"detail": "Não há restrições de famílias para dividir este pedido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        pedidos_criados = dividir_pedido_validado(serializer.validated_data, analise=analise)
+        data = PedidoSerializer(pedidos_criados, many=True, context=self.get_serializer_context()).data
+        return Response(
+            {
+                "success": True,
+                "dividido": True,
+                "mensagem": analise.get("mensagem") or "Pedido dividido em grupos independentes.",
+                "total_grupos": len(pedidos_criados),
+                "nf": serializer.validated_data.get("nf"),
+                "pedidos": data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class RotaCreateViewSet(viewsets.ModelViewSet):
     queryset = Rota.objects.all()
@@ -106,24 +150,56 @@ class AtribuirPedidosRotaView(APIView):
 
     def post(self, request):
         rota_id = request.data.get("rota_id")
-        pedidos_ids = request.data.get("pedidos_ids", [])
+        pedidos_payload = request.data.get("pedidos_ids", [])
 
-        if not rota_id or not pedidos_ids:
+        if not rota_id or not pedidos_payload:
             return Response({"detail": "Informe rota_id e pedidos_ids."}, status=status.HTTP_400_BAD_REQUEST)
 
         rota = get_object_or_404(Rota, pk=rota_id)
-        pedidos = Pedido.objects.filter(id__in=pedidos_ids)
-        if pedidos.count() != len(pedidos_ids):
+        try:
+            pedidos_normalizados = normalizar_payload_pedidos(pedidos_payload)
+        except ValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        pedidos_ids = [p["pedido_id"] for p in pedidos_normalizados]
+        pedidos_map = {p.id: p for p in Pedido.objects.filter(id__in=pedidos_ids)}
+        if len(set(pedidos_ids)) != len(pedidos_map):
             return Response({"detail": "Alguns pedidos nao foram encontrados."}, status=status.HTTP_400_BAD_REQUEST)
+
+        vinculos = []
+        for entry in pedidos_normalizados:
+            pedido = pedidos_map[entry["pedido_id"]]
+            grupo = None
+            grupo_id = entry.get("grupo_restricao_id")
+            if grupo_id:
+                grupo = get_object_or_404(PedidoRestricaoGrupo, pk=grupo_id, pedido=pedido)
+            elif pedido.grupos_restricao.filter(ativo=True).exists():
+                return Response(
+                    {"detail": f"Pedido {pedido.id} foi repartido. Informe o grupo antes de adicionar na rota."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            vinculos.append((pedido, grupo))
+
+        familias_existentes = coletar_familias_da_rota(rota)
+        try:
+            validar_novos_vinculos_em_rota(vinculos, familias_iniciais=familias_existentes)
+        except ValidationError as exc:
+            mensagem = ", ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+            return Response({"detail": mensagem}, status=status.HTTP_400_BAD_REQUEST)
 
         ultima_ordem = RotaPedido.objects.filter(rota=rota).aggregate(Max("ordem_entrega")).get("ordem_entrega__max") or 0
         criados = 0
-        for idx, pedido in enumerate(pedidos, start=1):
-            if RotaPedido.objects.filter(rota=rota, pedido=pedido).exists():
+        for idx, (pedido, grupo) in enumerate(vinculos, start=1):
+            if RotaPedido.objects.filter(
+                rota=rota,
+                pedido=pedido,
+                grupo_restricao=grupo,
+            ).exists():
                 continue
             RotaPedido.objects.create(
                 rota=rota,
                 pedido=pedido,
+                grupo_restricao=grupo,
                 ordem_entrega=ultima_ordem + idx,
             )
             criados += 1
