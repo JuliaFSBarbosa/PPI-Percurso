@@ -9,11 +9,15 @@ import styles from "./page.module.css";
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { loginSchema } from "@/schemas/auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "next-themes";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export default function Login() {
   const [errors, setErrors] = useState<{ email?: string; password?: string; auth?: string }>({});
+  const { theme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -74,35 +78,61 @@ export default function Login() {
     };
   }, []);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const activeTheme = mounted ? (theme === "system" ? resolvedTheme ?? "light" : theme ?? "light") : "light";
+  const backgroundImage = activeTheme === "dark" ? "/login_escuro.png" : "/login_claro.png";
+  const isDarkCard = activeTheme === "dark";
+  const themeClass = isDarkCard ? styles.darkTheme : styles.lightTheme;
+  const backgroundStyle = mounted ? { backgroundImage: `url(${backgroundImage})` } : undefined;
+
   return (
-    <div className={`${styles.wrapper} ${inter.className}`}>
-      <div className={styles.frame}>
-        <div className={styles.left}>
-          <div className={styles.panel}>
-            <form onSubmit={handleSubmit} noValidate>
-              <h1 className={styles.title}>Iniciar sessão</h1>
-              <div className={styles.row}>
-                <label htmlFor="email">Email</label>
-                <input id="email" name="email" type="email" placeholder="seu@email.com" />
-                {errors.email && <small className={styles.error}>{errors.email}</small>}
-              </div>
-              <div className={styles.row}>
-                <label htmlFor="pass">Senha</label>
-                <input id="pass" name="password" type="password" placeholder="********" />
-                {errors.password && <small className={styles.error}>{errors.password}</small>}
-              </div>
-              {errors.auth && <div className={styles.error}>{errors.auth}</div>}
-              <div className={styles.cta}>
-                <button type="submit" className={`${styles.btn} ${styles.primary} ${styles.blockBtn}`}>Entrar</button>
-              </div>
-            </form>
-          </div>
+    <div className={`${styles.wrapper} ${inter.className}`} style={backgroundStyle}>
+      <div
+        className={`${styles.glassCard} ${isDarkCard ? styles.darkCard : styles.lightCard} ${themeClass}`}
+      >
+        <div className={styles.toggleWrapper}>
+          <ThemeToggle className={styles.themeBtn} />
         </div>
-        <div className={styles.right}>
-          <div className={styles.logoWrap}>
-            <img src="/logo_percurso.png" alt="Logo Percurso" />
+          <div className={styles.logoSection}>
+            <div className={styles.logoWrap}>
+              <img src="/logo_percurso.png" alt="Logo Percurso" style={{ width: "clamp(160px, 20vw, 220px)", height: "auto" }} />
+            </div>
           </div>
-        </div>
+        <h1 className={styles.title}>Iniciar sessão</h1>
+        <p className={styles.subtitle}>Preencha suas informações para acessar o sistema.</p>
+        <form onSubmit={handleSubmit} noValidate className={styles.form}>
+          <div className={styles.field}>
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="seu@email.com"
+              aria-invalid={Boolean(errors.email)}
+            />
+            {errors.email && <small className={styles.error}>{errors.email}</small>}
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="pass">Senha</label>
+            <input
+              id="pass"
+              name="password"
+              type="password"
+              placeholder="********"
+              aria-invalid={Boolean(errors.password)}
+            />
+            {errors.password && <small className={styles.error}>{errors.password}</small>}
+          </div>
+          {errors.auth && <p className={styles.authError}>{errors.auth}</p>}
+          <div className={styles.cta}>
+            <button type="submit" className={`${styles.btn} ${styles.primary}`}>
+              Entrar
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
