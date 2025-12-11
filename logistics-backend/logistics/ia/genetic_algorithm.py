@@ -1,7 +1,16 @@
+import logging
 import math
+import os
 import random
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+try:
+    import requests
+except ImportError:
+    requests = None
 
 
 def calcular_distancia(coord1: Tuple[float, float], coord2: Tuple[float, float]) -> float:
@@ -24,13 +33,65 @@ def calcular_distancia(coord1: Tuple[float, float], coord2: Tuple[float, float])
     return raio_terra * c
 
 
-def avaliar_rota(rota: List[int], coordenadas: List[Tuple[float, float]], deposito: Tuple[float, float]) -> float:
+def _criar_distancia_fn_matriz(matriz: List[List[float]]) -> Callable[[int, int], float]:
+    """Cria funcao de distancia a partir de uma matriz pre-computada (km)."""
+
+    def _dist(a: int, b: int) -> float:
+        return matriz[a][b]
+
+    return _dist
+
+
+def _construir_matriz_osrm(
+    pontos: List[Tuple[float, float]],
+    deposito: Tuple[float, float],
+    base_url: str = "http://localhost:5000",
+) -> Optional[List[List[float]]]:
+    """
+    Constroi matriz de distancias viarias (km) via OSRM /table.
+    Espera OSRM acessivel em base_url. Retorna None se nao conseguir obter.
+    """
+    if requests is None:
+        return None
+
+    coords = pontos + [deposito]  # pedidos + deposito no final
+    coords_str = ";".join(f"{lon},{lat}" for lat, lon in coords)
+    url = f"{base_url.rstrip('/')}/table/v1/driving/{coords_str}?annotations=distance"
+
+    try:
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        dist_metros = data.get("distances")
+        if not dist_metros:
+            return None
+
+        # Converte metros para km
+        return [[round(val / 1000, 3) for val in linha] for linha in dist_metros]
+    except Exception:
+        return None
+
+
+def avaliar_rota(
+    rota: List[int],
+    coordenadas: List[Tuple[float, float]],
+    deposito: Tuple[float, float],
+    distancia_fn: Optional[Callable[[int, int], float]] = None,
+    deposito_idx: Optional[int] = None,
+) -> float:
     # Custo total da rota: deposito -> pontos -> deposito.
     if not rota:
         return 0
 
-    custo_total = calcular_distancia(deposito, coordenadas[rota[0]])
+    # Se houver funcao de distancia (matriz), usa indices; senao usa Haversine.
+    if distancia_fn is not None and deposito_idx is not None:
+        custo_total = distancia_fn(deposito_idx, rota[0])
+        for i in range(len(rota) - 1):
+            custo_total += distancia_fn(rota[i], rota[i + 1])
+        custo_total += distancia_fn(rota[-1], deposito_idx)
+        return custo_total
 
+    custo_total = calcular_distancia(deposito, coordenadas[rota[0]])
     for i in range(len(rota) - 1):
         coord_atual = coordenadas[rota[i]]
         coord_proxima = coordenadas[rota[i + 1]]
@@ -115,12 +176,16 @@ def mutacao_inversao(rota: List[int], taxa_mutacao: float = 0.1) -> List[int]:
 
 def _preparar_parametros(parametros: Dict[str, Any], num_pedidos: int) -> Dict[str, Any]:
     """Normaliza e limita parametros do GA para evitar entradas extremas."""
+    usar_osrm_default = str(os.getenv("LOGISTICS_OSRM_ENABLED", "true")).lower() in {"1", "true", "yes", "on"}
+    osrm_base_default = os.getenv("LOGISTICS_OSRM_URL", "http://localhost:5000")
     defaults = {
-        "tamanho_pop": 100,
+        "tamanho_pop": 200,
         "num_geracoes": 500,
         "taxa_crossover": 0.8,
         "taxa_mutacao": 0.2,
         "elitismo": 2,
+        "usar_osrm": usar_osrm_default,
+        "osrm_base_url": osrm_base_default,
     }
 
     seguros: Dict[str, Any] = defaults.copy()
@@ -163,6 +228,15 @@ def _preparar_parametros(parametros: Dict[str, Any], num_pedidos: int) -> Dict[s
         except (TypeError, ValueError):
             pass
 
+    if "usar_osrm" in parametros:
+        seguros["usar_osrm"] = bool(parametros["usar_osrm"])
+
+    if "osrm_base_url" in parametros:
+        try:
+            seguros["osrm_base_url"] = str(parametros["osrm_base_url"])
+        except (TypeError, ValueError):
+            pass
+
     # Garante que elitismo nao seja maior que a populacao final.
     seguros["elitismo"] = min(seguros["elitismo"], seguros["tamanho_pop"])
 
@@ -177,6 +251,8 @@ def algoritmo_genetico(
     taxa_crossover: float = 0.8,
     taxa_mutacao: float = 0.2,
     elitismo: int = 2,
+    distancia_fn: Optional[Callable[[int, int], float]] = None,
+    deposito_idx: Optional[int] = None,
 ) -> dict:
     # Algoritmo genetico para otimizar a ordem de entregas.
     inicio_tempo = time.time()
@@ -209,8 +285,13 @@ def algoritmo_genetico(
     geracoes_sem_melhora = 0
     max_sem_melhora = max(50, num_geracoes // 2)
 
+    usar_matriz = distancia_fn is not None and deposito_idx is not None
+
     for geracao in range(num_geracoes):
-        fitness = [avaliar_rota(rota, pedidos_coords, deposito_coords) for rota in populacao]
+        fitness = [
+            avaliar_rota(rota, pedidos_coords, deposito_coords, distancia_fn if usar_matriz else None, deposito_idx)
+            for rota in populacao
+        ]
 
         idx_melhor = fitness.index(min(fitness))
         melhor_fitness = fitness[idx_melhor]
@@ -287,6 +368,37 @@ def otimizar_rota_pedidos(
 
     parametros_tratados = _preparar_parametros(parametros or {}, num_pedidos=len(pedidos_coords))
 
+    # Tenta construir matriz OSRM se solicitado.
+    distancia_fn = None
+    deposito_idx = None
+    osrm_usado = False
+    if parametros_tratados.get("usar_osrm"):
+        logger.info(
+            "[GA][OSRM] solicitando matriz via OSRM: pontos=%s deposito=1 url=%s",
+            len(pedidos_coords),
+            parametros_tratados.get("osrm_base_url"),
+        )
+        matriz = _construir_matriz_osrm(
+            pontos=pedidos_coords,
+            deposito=deposito_coords,
+            base_url=parametros_tratados.get("osrm_base_url", "http://localhost:5000"),
+        )
+        if matriz:
+            distancia_fn = _criar_distancia_fn_matriz(matriz)
+            deposito_idx = len(pedidos_coords)  # deposito foi adicionado ao final da matriz
+            osrm_usado = True
+            logger.info(
+                "[GA][OSRM] matriz obtida com sucesso: tamanho=%sx%s url=%s",
+                len(matriz),
+                len(matriz[0]) if matriz else 0,
+                parametros_tratados.get("osrm_base_url"),
+            )
+        else:
+            logger.warning(
+                "[GA][OSRM] falha ao obter matriz; usando Haversine. url=%s",
+                parametros_tratados.get("osrm_base_url"),
+            )
+
     resultado = algoritmo_genetico(
         pedidos_coords=pedidos_coords,
         deposito_coords=deposito_coords,
@@ -295,6 +407,8 @@ def otimizar_rota_pedidos(
         taxa_crossover=parametros_tratados["taxa_crossover"],
         taxa_mutacao=parametros_tratados["taxa_mutacao"],
         elitismo=parametros_tratados["elitismo"],
+        distancia_fn=distancia_fn,
+        deposito_idx=deposito_idx,
     )
 
     rota_otimizada = resultado["rota_otimizada"] or []
@@ -326,5 +440,6 @@ def otimizar_rota_pedidos(
         "tempo_execucao_s": resultado["tempo_execucao_s"],
         "num_geracoes": resultado["num_geracoes"],
         "melhoria_percentual": resultado["melhoria_percentual"],
-        "parametros_utilizados": parametros_tratados,
+        "parametros_utilizados": {**parametros_tratados, "osrm_usado": osrm_usado},
+        "metrica_utilizada": "osrm" if osrm_usado else "haversine",
     }

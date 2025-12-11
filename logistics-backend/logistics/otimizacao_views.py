@@ -129,7 +129,7 @@ class SalvarRotaOtimizadaView(APIView):
                 "[GA] salvar rota otimizada: data=%s capacidade=%s pedidos=%s distancia=%s",
                 data_rota,
                 capacidade_max,
-                pedidos_ordem,
+                pedidos_payload,
                 distancia_total,
             )
 
@@ -195,7 +195,7 @@ class SalvarRotaOtimizadaView(APIView):
                     ordem_entrega=ordem,
                 )
 
-            logger.info("[GA] rota salva id=%s pedidos=%s", rota.id, pedidos_ordem)
+            logger.info("[GA] rota salva id=%s pedidos=%s", rota.id, pedidos_payload)
 
             return Response(
                 {

@@ -15,13 +15,20 @@ const buildHeaders = async (req?: Request) => {
   return hdr;
 };
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(
+  _: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
   const hdr = await buildHeaders();
-  const upstream = await fetch(`${readPath}${params.id}/`, {
+  const upstream = await fetch(`${readPath}${id}/`, {
     method: "GET",
     headers: hdr,
     cache: "no-store",
   });
+  if (upstream.status === 204) {
+    return new Response(null, { status: upstream.status });
+  }
   const text = await upstream.text();
   return new Response(text, {
     status: upstream.status,
@@ -29,15 +36,22 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   });
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
   const hdr = await buildHeaders(req);
   if (!hdr["Content-Type"]) hdr["Content-Type"] = "application/json";
   const body = await req.text();
-  const upstream = await fetch(`${writePath}${params.id}/`, {
+  const upstream = await fetch(`${writePath}${id}/`, {
     method: "PUT",
     headers: hdr,
     body,
   });
+  if (upstream.status === 204) {
+    return new Response(null, { status: upstream.status });
+  }
   const text = await upstream.text();
   return new Response(text, {
     status: upstream.status,
@@ -45,15 +59,22 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   });
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
   const hdr = await buildHeaders(req);
   if (!hdr["Content-Type"]) hdr["Content-Type"] = "application/json";
   const body = await req.text();
-  const upstream = await fetch(`${writePath}${params.id}/`, {
+  const upstream = await fetch(`${writePath}${id}/`, {
     method: "PATCH",
     headers: hdr,
     body,
   });
+  if (upstream.status === 204) {
+    return new Response(null, { status: upstream.status });
+  }
   const text = await upstream.text();
   return new Response(text, {
     status: upstream.status,
@@ -61,12 +82,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   });
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function DELETE(
+  _: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
   const hdr = await buildHeaders();
-  const upstream = await fetch(`${writePath}${params.id}/`, {
+  const upstream = await fetch(`${writePath}${id}/`, {
     method: "DELETE",
     headers: hdr,
   });
+  if (upstream.status === 204) {
+    return new Response(null, { status: upstream.status });
+  }
   const text = await upstream.text();
   return new Response(text, {
     status: upstream.status,
