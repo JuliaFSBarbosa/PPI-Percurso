@@ -243,25 +243,44 @@ def _tentar_mapa_osm(coords: List[dict]) -> Optional[bytes]:
         return None
 
 
-def _google_maps_link(coords: List[dict]) -> Optional[str]:
-    # Monta um link do Google Maps Directions com origem/destino/waypoints.
+def _google_maps_links(coords: List[dict], max_stops: int = 9) -> List[str]:
+    """
+    Monta um ou mais links do Google Maps Directions.
+    - Google limita cerca de 10 pontos por rota (origem + destino + waypoints).
+    - max_stops indica quantos pontos por segmento (destino + waypoints); a origem É fixa.
+    - Para manter continuidade, cada segmento seguinte começa no último ponto do segmento anterior.
+    """
     if not coords or len(coords) < 2:
-        return None
-    origin = f"{coords[0]['latitude']},{coords[0]['longitude']}"
-    destination = f"{coords[-1]['latitude']},{coords[-1]['longitude']}"
-    waypoints_list = coords[1:-1]
-    waypoints = "|".join(f"{c['latitude']},{c['longitude']}" for c in waypoints_list) if waypoints_list else ""
+        return []
 
-    params = {
-        "api": "1",
-        "travelmode": "driving",
-        "origin": origin,
-        "destination": destination,
-    }
-    if waypoints:
-        params["waypoints"] = waypoints
+    links: List[str] = []
+    start = 1  # usamos coords[0] como origem inicial (deposito)
 
-    return f"https://www.google.com/maps/dir/?{urllib.parse.urlencode(params)}"
+    while start < len(coords):
+        chunk = coords[start : start + max_stops]
+        origin_ponto = coords[0] if start == 1 else coords[start - 1]
+        destination_ponto = chunk[-1]
+        waypoints_list = chunk[:-1]
+
+        origin = f"{origin_ponto['latitude']},{origin_ponto['longitude']}"
+        destination = f"{destination_ponto['latitude']},{destination_ponto['longitude']}"
+        waypoints = (
+            "|".join(f"{c['latitude']},{c['longitude']}" for c in waypoints_list) if waypoints_list else ""
+        )
+
+        params = {
+            "api": "1",
+            "travelmode": "driving",
+            "origin": origin,
+            "destination": destination,
+        }
+        if waypoints:
+            params["waypoints"] = waypoints
+
+        links.append(f"https://www.google.com/maps/dir/?{urllib.parse.urlencode(params)}")
+        start += max_stops
+
+    return links
 
 
 def gerar_relatorio_rota_pdf(
@@ -389,11 +408,15 @@ def gerar_relatorio_rota_pdf(
     story.append(Spacer(1, 16))
 
     story.append(Paragraph("Link da Rota", styles["SectionTitle"]))
-    maps_link = _google_maps_link(coords_para_mapa)
-    if maps_link:
-        story.append(Paragraph(f'<link href="{maps_link}">Abrir no Google Maps</link>', styles["Normal"]))
-    else:
+    maps_links = _google_maps_links(coords_para_mapa)
+    if not maps_links:
         story.append(Paragraph("Link da rota indisponivel (faltam coordenadas).", styles["Normal"]))
+    elif len(maps_links) == 1:
+        story.append(Paragraph(f'<link href="{maps_links[0]}">Abrir no Google Maps</link>', styles["Normal"]))
+    else:
+        story.append(Paragraph("Segmentos do Google Maps (limite de 10 pontos por link):", styles["Normal"]))
+        for idx, link in enumerate(maps_links, 1):
+            story.append(Paragraph(f'<link href="{link}">Abrir segmento {idx}</link>', styles["Normal"]))
     story.append(Spacer(1, 16))
 
     story.append(Paragraph("Pedidos e Entregas", styles["SectionTitle"]))

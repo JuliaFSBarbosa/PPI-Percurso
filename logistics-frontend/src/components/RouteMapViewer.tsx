@@ -8,13 +8,14 @@ type RouteMapViewerProps = {
     longitude: number;
     label?: string;
   }[];
+  geometry?: any;
 };
 
 /**
  * Visualizador de rota usando Leaflet via CDN (sem depender do pacote local).
- * Inclui invalidateSize para funcionar em contêiner oculto e evitar corte em screenshots.
+ * Inclui invalidateSize para funcionar em container oculto e evitar corte em screenshots.
  */
-export default function RouteMapViewer({ pontos }: RouteMapViewerProps) {
+export default function RouteMapViewer({ pontos, geometry }: RouteMapViewerProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export default function RouteMapViewer({ pontos }: RouteMapViewerProps) {
       const L = await ensureLeaflet();
       if (!L || !mapRef.current) return;
 
-      // Corrige ícones
+      // Corrige icones
       if (L.Icon && L.Icon.Default) {
         const proto = (L.Icon.Default.prototype as any) || {};
         delete proto._getIconUrl;
@@ -87,19 +88,33 @@ export default function RouteMapViewer({ pontos }: RouteMapViewerProps) {
         L.marker([p.latitude, p.longitude]).addTo(map).bindPopup(p.label || "Ponto");
       });
 
-      const renderer = L.canvas({ padding: 0.5 });
-      const polyline = L.polyline(
-        pontos.map((p) => [p.latitude, p.longitude]) as [number, number][],
-        { color: "blue", weight: 4, renderer }
-      ).addTo(map);
+      let bounds: any = null;
 
-      map.fitBounds(polyline.getBounds(), { padding: [16, 16] });
+      if (geometry) {
+        const layer = L.geoJSON(geometry, {
+          style: { color: "blue", weight: 4 },
+        }).addTo(map);
+        bounds = layer.getBounds();
+      } else {
+        const renderer = L.canvas({ padding: 0.5 });
+        const polyline = L.polyline(
+          pontos.map((p) => [p.latitude, p.longitude]) as [number, number][],
+          { color: "blue", weight: 4, renderer }
+        ).addTo(map);
+        bounds = polyline.getBounds();
+      }
 
-      // Reajusta dimensão quando renderizado off-screen (evita corte em screenshots)
+      if (bounds && bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [16, 16] });
+      }
+
+      // Reajusta dimensao quando renderizado off-screen (evita corte em screenshots)
       setTimeout(() => {
         try {
           map.invalidateSize();
-          map.fitBounds(polyline.getBounds(), { padding: [16, 16] });
+          if (bounds && bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [16, 16] });
+          }
         } catch (err) {
           console.warn("Falha ao ajustar mapa", err);
         }
@@ -111,7 +126,7 @@ export default function RouteMapViewer({ pontos }: RouteMapViewerProps) {
     return () => {
       if (map) map.remove();
     };
-  }, [pontos]);
+  }, [pontos, geometry]);
 
   return (
     <div

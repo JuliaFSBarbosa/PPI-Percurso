@@ -42,33 +42,46 @@ const statusBadge = (status: RotaStatus) => {
       return styles.badge;
   }
 };
-// Monta link para Google Maps com origem selecionada e multiplas paradas
-const buildMapsLink = (
+// Monta links para Google Maps dividindo em blocos de atÇ¸ 10 pontos (origem + paradas)
+const buildMapsLinks = (
   coords: { latitude: number; longitude: number }[],
   deposito: { latitude: number; longitude: number } = defaultDeposito
 ) => {
-  if (!coords || coords.length === 0) return null;
-  const lat = Number(deposito?.latitude);
-  const lng = Number(deposito?.longitude);
-  const origin =
-    Number.isFinite(lat) && Number.isFinite(lng)
-      ? `${lat},${lng}`
-      : `${defaultDeposito.latitude},${defaultDeposito.longitude}`;
-  const destination = `${coords[coords.length - 1].latitude},${coords[coords.length - 1].longitude}`;
-  const waypoints = coords.slice(0, -1).map((c) => `${c.latitude},${c.longitude}`).join("|");
-  const params = new URLSearchParams();
-  params.set("api", "1");
-  params.set("origin", origin);
-  params.set("destination", destination);
-  if (waypoints) params.set("waypoints", waypoints);
-  params.set("travelmode", "driving");
-  return `https://www.google.com/maps/dir/?${params.toString()}`;
+  if (!coords || coords.length === 0) return [];
+  const maxStops = 9; // pontos por link (destino + waypoints); origem É fixa
+  const links: string[] = [];
+  let start = 0;
+
+  while (start < coords.length) {
+    // Pega bloco de pontos (destino É o Ýltimo do bloco)
+    const chunk = coords.slice(start, start + maxStops);
+    // Se nao É o primeiro bloco, a origem passa a ser o ponto anterior para manter continuidade
+    const originCoords = start === 0 ? deposito : coords[start - 1];
+    const origin = `${originCoords.latitude},${originCoords.longitude}`;
+    const destination = `${chunk[chunk.length - 1].latitude},${chunk[chunk.length - 1].longitude}`;
+    const waypoints = chunk
+      .slice(0, -1)
+      .map((c) => `${c.latitude},${c.longitude}`)
+      .join("|");
+
+    const params = new URLSearchParams();
+    params.set("api", "1");
+    params.set("origin", origin);
+    params.set("destination", destination);
+    if (waypoints) params.set("waypoints", waypoints);
+    params.set("travelmode", "driving");
+    links.push(`https://www.google.com/maps/dir/?${params.toString()}`);
+    start += maxStops;
+  }
+
+  return links;
 };
 export default function RotasPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { data: session } = useSession();
-  const roleLabel = session?.user?.is_superuser ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
+  const isAdmin = !!session?.user?.is_superuser;
+  const roleLabel = isAdmin ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
   const deniedAccess = searchParams?.get("acesso") === "negado";
   const isDefaultProfile = !!session?.user?.profile?.is_default;
   const [rotas, setRotas] = useState<Rota[]>([]);
@@ -79,11 +92,18 @@ export default function RotasPage() {
   const [modalPedidos, setModalPedidos] = useState<{ rotaId: number; pedidos: RotaPedido[] } | null>(null);
   const [loadingPedidosId, setLoadingPedidosId] = useState<number | null>(null);
   const [loadingMapsId, setLoadingMapsId] = useState<number | null>(null);
+  const [loadingPreviewId, setLoadingPreviewId] = useState<number | null>(null);
   const [loadingPdfId, setLoadingPdfId] = useState<number | null>(null);
   const [optimizedCoords, setOptimizedCoords] = useState<Record<number, { latitude: number; longitude: number }[]>>({});
   const [snapshotCoords, setSnapshotCoords] = useState<{ latitude: number; longitude: number; label?: string }[] | null>(
     null
   );
+  const [mapPreview, setMapPreview] = useState<{
+    rotaId: number;
+    coords: { latitude: number; longitude: number; label?: string }[];
+    geometry?: any;
+  } | null>(null);
+  const [mapsLinksModal, setMapsLinksModal] = useState<{ rotaId: number; links: string[] } | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const [editingRota, setEditingRota] = useState<{ id: number; data_rota: string; capacidade_max: number } | null>(null);
@@ -199,6 +219,26 @@ export default function RotasPage() {
     const coords = buildCoordsFromRota(det);
     setOptimizedCoords((prev) => ({ ...prev, [rotaId]: coords }));
     return coords;
+  };
+
+  const fetchOsrmGeometry = async (coords: { latitude: number; longitude: number }[]) => {
+    const payload = {
+      coords: coords.map((c) => ({
+        latitude: Number(c.latitude),
+        longitude: Number(c.longitude),
+      })),
+    };
+    const resp = await fetch("/api/osrm/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    if (!resp.ok) {
+      const raw = await resp.text();
+      throw new Error(parseApiError(raw, "Falha ao calcular rota no OSRM.", resp.status));
+    }
+    return resp.json();
   };
 
   const abrirEdicao = async (rotaId: number) => {
@@ -428,8 +468,12 @@ export default function RotasPage() {
                                 coords = await ensureCoords(rota.id);
                               }
                               if (coords && coords.length > 0) {
-                                const link = buildMapsLink(coords, defaultDeposito);
-                                if (link) window.open(link, "_blank", "noopener,noreferrer");
+                                const links = buildMapsLinks(coords, defaultDeposito);
+                                if (links.length === 1) {
+                                  window.open(links[0], "_blank", "noopener,noreferrer");
+                                } else if (links.length > 1) {
+                                  setMapsLinksModal({ rotaId: rota.id, links });
+                                }
                               }
                             } finally {
                               setLoadingMapsId(null);
@@ -437,8 +481,41 @@ export default function RotasPage() {
                           }}
                           disabled={loadingMapsId === rota.id}
                         >
-                          {loadingMapsId === rota.id ? "Abrindo..." : "Abrir no Maps"}
+                          {loadingMapsId === rota.id ? "Abrindo..." : "Abrir no Maps (segmentos)"}
                         </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                            onClick={async () => {
+                              setLoadingPreviewId(rota.id);
+                              try {
+                                const coords = await ensureCoords(rota.id);
+                                if (!coords || coords.length === 0) return;
+                                const coordsForMap = [
+                                  { ...defaultDeposito, label: "Deposito (inicio)" },
+                                  ...coords.map((c, idx) => ({ ...c, label: `Parada #${idx + 1}` })),
+                                  { ...defaultDeposito, label: "Deposito (fim)" },
+                                ];
+                                let geometry: any = null;
+                                try {
+                                  const osrmResp = await fetchOsrmGeometry(
+                                    coordsForMap.map((c) => ({ latitude: c.latitude, longitude: c.longitude }))
+                                  );
+                                  geometry = osrmResp?.geometry || null;
+                                } catch (err) {
+                                  console.warn("Falha ao buscar geometria OSRM; exibindo reta simples.", err);
+                                }
+                                setMapPreview({ rotaId: rota.id, coords: coordsForMap, geometry });
+                              } finally {
+                                setLoadingPreviewId(null);
+                              }
+                            }}
+                            disabled={loadingPreviewId === rota.id}
+                          >
+                            {loadingPreviewId === rota.id ? "Carregando..." : "Ver no mapa"}
+                          </button>
+                        )}
                       </div>
                     </td>
                     <td>
@@ -595,6 +672,105 @@ export default function RotasPage() {
                     ))}
                   </ul>
                 )}
+              </div>
+            </div>
+          )}
+          {mapsLinksModal && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.55)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 2050,
+              }}
+              onClick={() => setMapsLinksModal(null)}
+            >
+              <div
+                className={styles.card}
+                style={{ width: "92%", maxWidth: 520, maxHeight: "70vh", overflow: "auto", padding: 16 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div>
+                    <strong>Rotas no Maps (segmentos)</strong>
+                    <p className={styles.muted} style={{ marginTop: 4 }}>
+                      Clique em cada link para abrir; o Google limita 10 pontos por rota.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                    onClick={() => setMapsLinksModal(null)}
+                  >
+                    Fechar
+                  </button>
+                </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {mapsLinksModal.links.map((link, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className={`${styles.btn} ${styles.primary} ${styles.sm}`}
+                      onClick={() => window.open(link, "_blank", "noopener,noreferrer")}
+                    >
+                      Abrir segmento {idx + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {isAdmin && mapPreview && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.55)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 2050,
+              }}
+              onClick={() => setMapPreview(null)}
+            >
+              <div
+                className={styles.card}
+                style={{ width: "92%", maxWidth: 720, maxHeight: "82vh", overflow: "auto", padding: 16 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div>
+                    <strong>Rota #{mapPreview.rotaId}</strong>
+                    <p className={styles.muted} style={{ marginTop: 4 }}>
+                      Visualizacao com todos os pontos (sem limite do Google Maps)
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                    onClick={() => setMapPreview(null)}
+                  >
+                    Fechar
+                  </button>
+                </div>
+                <RouteMapViewer pontos={mapPreview.coords} geometry={mapPreview.geometry} />
               </div>
             </div>
           )}
