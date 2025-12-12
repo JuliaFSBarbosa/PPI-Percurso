@@ -33,6 +33,24 @@ def calcular_distancia(coord1: Tuple[float, float], coord2: Tuple[float, float])
     return raio_terra * c
 
 
+def _validar_entradas(pedidos: List[dict], deposito: dict) -> None:
+    """Valida estrutura basica de pedidos e deposito para evitar falhas silenciosas."""
+    if deposito is None or "latitude" not in deposito or "longitude" not in deposito:
+        raise ValueError("Deposito deve conter latitude e longitude.")
+
+    for i, pedido in enumerate(pedidos):
+        if not isinstance(pedido, dict):
+            raise ValueError(f"Pedido na posicao {i} deve ser um dict.")
+        for campo in ("id", "latitude", "longitude"):
+            if campo not in pedido:
+                raise ValueError(f"Pedido na posicao {i} esta sem campo obrigatorio: {campo}")
+        try:
+            float(pedido["latitude"])
+            float(pedido["longitude"])
+        except (TypeError, ValueError):
+            raise ValueError(f"Pedido na posicao {i} possui latitude/longitude invalidos.")
+
+
 def _criar_distancia_fn_matriz(matriz: List[List[float]]) -> Callable[[int, int], float]:
     """Cria funcao de distancia a partir de uma matriz pre-computada (km)."""
 
@@ -46,6 +64,8 @@ def _construir_matriz_osrm(
     pontos: List[Tuple[float, float]],
     deposito: Tuple[float, float],
     base_url: str = "http://localhost:5000",
+    timeout: int = 15,
+    tentativas: int = 3,
 ) -> Optional[List[List[float]]]:
     """
     Constroi matriz de distancias viarias (km) via OSRM /table.
@@ -58,18 +78,24 @@ def _construir_matriz_osrm(
     coords_str = ";".join(f"{lon},{lat}" for lat, lon in coords)
     url = f"{base_url.rstrip('/')}/table/v1/driving/{coords_str}?annotations=distance"
 
-    try:
-        resp = requests.get(url, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        dist_metros = data.get("distances")
-        if not dist_metros:
-            return None
+    for tentativa in range(1, max(1, tentativas) + 1):
+        try:
+            resp = requests.get(url, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            dist_metros = data.get("distances")
+            if not dist_metros:
+                logger.warning("[GA][OSRM] resposta sem campo distances na tentativa %s", tentativa)
+                continue
 
-        # Converte metros para km
-        return [[round(val / 1000, 3) for val in linha] for linha in dist_metros]
-    except Exception:
-        return None
+            # Converte metros para km
+            return [[round(val / 1000, 3) for val in linha] for linha in dist_metros]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[GA][OSRM] tentativa %s falhou: %s", tentativa, exc)
+            if tentativa >= tentativas:
+                break
+            time.sleep(min(2 * tentativa, 5))
+    return None
 
 
 def avaliar_rota(
@@ -179,13 +205,16 @@ def _preparar_parametros(parametros: Dict[str, Any], num_pedidos: int) -> Dict[s
     usar_osrm_default = str(os.getenv("LOGISTICS_OSRM_ENABLED", "true")).lower() in {"1", "true", "yes", "on"}
     osrm_base_default = os.getenv("LOGISTICS_OSRM_URL", "http://localhost:5000")
     defaults = {
-        "tamanho_pop": 200,
+        "tamanho_pop": 100,
         "num_geracoes": 500,
         "taxa_crossover": 0.8,
         "taxa_mutacao": 0.2,
         "elitismo": 2,
         "usar_osrm": usar_osrm_default,
         "osrm_base_url": osrm_base_default,
+        "osrm_timeout": 15,
+        "osrm_tentativas": 3,
+        "seed": None,
     }
 
     seguros: Dict[str, Any] = defaults.copy()
@@ -237,6 +266,24 @@ def _preparar_parametros(parametros: Dict[str, Any], num_pedidos: int) -> Dict[s
         except (TypeError, ValueError):
             pass
 
+    if "osrm_timeout" in parametros:
+        try:
+            seguros["osrm_timeout"] = int(_clamp(int(parametros["osrm_timeout"]), 1, 120))
+        except (TypeError, ValueError):
+            pass
+
+    if "osrm_tentativas" in parametros:
+        try:
+            seguros["osrm_tentativas"] = int(_clamp(int(parametros["osrm_tentativas"]), 1, 5))
+        except (TypeError, ValueError):
+            pass
+
+    if "seed" in parametros:
+        try:
+            seguros["seed"] = int(parametros["seed"])
+        except (TypeError, ValueError):
+            pass
+
     # Garante que elitismo nao seja maior que a populacao final.
     seguros["elitismo"] = min(seguros["elitismo"], seguros["tamanho_pop"])
 
@@ -253,9 +300,13 @@ def algoritmo_genetico(
     elitismo: int = 2,
     distancia_fn: Optional[Callable[[int, int], float]] = None,
     deposito_idx: Optional[int] = None,
+    random_seed: Optional[int] = None,
 ) -> dict:
     # Algoritmo genetico para otimizar a ordem de entregas.
     inicio_tempo = time.time()
+
+    if random_seed is not None:
+        random.seed(random_seed)
 
     num_pedidos = len(pedidos_coords)
     if num_pedidos == 0:
@@ -267,6 +318,7 @@ def algoritmo_genetico(
             "historico_melhor": [],
             "historico_media": [],
             "melhoria_percentual": 0,
+            "criterio_parada": "sem_pedidos",
         }
 
     tamanho_pop = max(4, min(int(tamanho_pop), 1000))
@@ -284,6 +336,7 @@ def algoritmo_genetico(
     melhor_fitness_global = float("inf")
     geracoes_sem_melhora = 0
     max_sem_melhora = max(50, num_geracoes // 2)
+    criterio_parada = "geracoes"
 
     usar_matriz = distancia_fn is not None and deposito_idx is not None
 
@@ -308,6 +361,7 @@ def algoritmo_genetico(
         historico_media.append(sum(fitness) / len(fitness))
 
         if geracoes_sem_melhora > max_sem_melhora:
+            criterio_parada = "estagnacao"
             break
 
         nova_populacao: List[List[int]] = []
@@ -354,6 +408,7 @@ def algoritmo_genetico(
         "historico_melhor": historico_melhor,
         "historico_media": historico_media,
         "melhoria_percentual": melhoria_percentual,
+        "criterio_parada": criterio_parada,
     }
 
 
@@ -363,6 +418,7 @@ def otimizar_rota_pedidos(
     parametros: Optional[Dict[str, Any]] = None,
 ) -> dict:
     # Converte pedidos e deposito para o GA e retorna rota otimizada.
+    _validar_entradas(pedidos, deposito)
     pedidos_coords = [(p["latitude"], p["longitude"]) for p in pedidos]
     deposito_coords = (deposito["latitude"], deposito["longitude"])
 
@@ -382,6 +438,8 @@ def otimizar_rota_pedidos(
             pontos=pedidos_coords,
             deposito=deposito_coords,
             base_url=parametros_tratados.get("osrm_base_url", "http://localhost:5000"),
+            timeout=parametros_tratados.get("osrm_timeout", 15),
+            tentativas=parametros_tratados.get("osrm_tentativas", 3),
         )
         if matriz:
             distancia_fn = _criar_distancia_fn_matriz(matriz)
@@ -409,6 +467,7 @@ def otimizar_rota_pedidos(
         elitismo=parametros_tratados["elitismo"],
         distancia_fn=distancia_fn,
         deposito_idx=deposito_idx,
+        random_seed=parametros_tratados.get("seed"),
     )
 
     rota_otimizada = resultado["rota_otimizada"] or []
@@ -440,6 +499,7 @@ def otimizar_rota_pedidos(
         "tempo_execucao_s": resultado["tempo_execucao_s"],
         "num_geracoes": resultado["num_geracoes"],
         "melhoria_percentual": resultado["melhoria_percentual"],
+        "criterio_parada": resultado["criterio_parada"],
         "parametros_utilizados": {**parametros_tratados, "osrm_usado": osrm_usado},
         "metrica_utilizada": "osrm" if osrm_usado else "haversine",
     }

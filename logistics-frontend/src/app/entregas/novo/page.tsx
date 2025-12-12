@@ -380,7 +380,7 @@ export default function NovoPedidoPage() {
               />
             </div>
 
-            <h4>📍 Localização de Entrega</h4>
+            <h4> Localização de Entrega</h4>
             <div className={styles.cards3}>
               <div className={styles.field}>
                 <label htmlFor="lat">Latitude</label>
@@ -407,7 +407,7 @@ export default function NovoPedidoPage() {
                   className={`${styles.btn} ${styles.ghost}`}
                   onClick={() => setShowMap(!showMap)}
                 >
-                  {showMap ? "🗺️ Ocultar Mapa" : "🗺️ Selecionar no Mapa"}
+                  {showMap ? " Ocultar Mapa" : " Selecionar no Mapa"}
                 </button>
               </div>
             </div>
