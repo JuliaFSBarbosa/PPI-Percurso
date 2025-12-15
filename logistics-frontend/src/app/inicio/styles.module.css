@@ -199,6 +199,7 @@
 .down{ color:var(--warn); }
 
 .quick-actions{ display:flex; gap:10px; margin:18px 0 6px; }
+.backButtonGroup{ margin-bottom:20px; }
 .splitAlert{
   margin:12px 0;
   padding:12px 16px;
@@ -250,13 +251,13 @@
 .input[aria-invalid="true"]{ border-color: var(--warn); box-shadow:0 0 0 2px rgba(231,76,60,.15); }
 .hint{ color:var(--muted); font-size:12px; }
 .inlineField{ flex-direction:row; align-items:center; gap:10px; }
-.inlineField label{ margin:0; }
+.inlineField label{ margin:0 0 0 8px; }
 .inlineField input[type="checkbox"]{ width:auto; height:18px; }
 .cards3{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 .checkboxField{
   display:flex;
   align-items:center;
-  gap:8px;
+  gap:12px;
   padding-left:4px;
 }
 .checkboxField input{
@@ -418,6 +419,10 @@
 }
 .quickProfileCard{
   margin-top:10px;
+}
+.quickProfileSave{
+  margin-top:18px;
+  align-self:flex-start;
 }
 .alert{
   margin:8px 0;

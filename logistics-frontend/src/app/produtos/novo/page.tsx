@@ -169,9 +169,11 @@ export default function NovoProdutoPage() {
         </header>
 
         <section className={styles.card}>
-          <button className={`${styles.btn} ${styles.ghost} ${styles.sm}`} onClick={() => router.back()}>
-            Voltar
-          </button>
+          <div className={styles.backButtonGroup}>
+            <button className={`${styles.btn} ${styles.ghost} ${styles.sm}`} onClick={() => router.back()}>
+              Voltar
+            </button>
+          </div>
           <form className={styles.form} onSubmit={handleSubmit}>
             <div className={styles.field}>
               <label htmlFor="nome">Nome</label>

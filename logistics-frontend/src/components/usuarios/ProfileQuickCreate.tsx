@@ -80,7 +80,7 @@ export function ProfileQuickCreate({ onCreated }: Props) {
           {error && <p className={styles.muted}>{error}</p>}
           <button
             type="button"
-            className={`${styles.btn} ${styles.primary}`}
+            className={`${styles.btn} ${styles.primary} ${styles.quickProfileSave}`}
             onClick={handleCreate}
             disabled={saving}
           >

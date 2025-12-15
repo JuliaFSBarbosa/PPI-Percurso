@@ -146,9 +146,11 @@ export default function NovoUsuárioPage() {
         </header>
 
         <section className={styles.card}>
-          <button className={`${styles.btn} ${styles.ghost} ${styles.sm}`} onClick={() => router.back()}>
-            Voltar
-          </button>
+          <div className={styles.backButtonGroup}>
+            <button className={`${styles.btn} ${styles.ghost} ${styles.sm}`} onClick={() => router.back()}>
+              Voltar
+            </button>
+          </div>
           <form className={styles.form} onSubmit={handleSubmit}>
             <div className={styles.field}>
               <label htmlFor="name">Nome</label>
@@ -216,7 +218,6 @@ export default function NovoUsuárioPage() {
             />
             {canToggleAdmin && (
               <div className={styles.field}>
-                <label htmlFor="is_superuser">Administrador</label>
                 <div className={styles.inlineField}>
                   <input
                     id="is_superuser"
@@ -224,6 +225,7 @@ export default function NovoUsuárioPage() {
                     checked={form.is_superuser}
                     onChange={(e) => setForm((prev) => ({ ...prev, is_superuser: e.target.checked }))}
                   />
+                  <label htmlFor="is_superuser">Administrador do Sistema</label>
                 </div>
               </div>
             )}
