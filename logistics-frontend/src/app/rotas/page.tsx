@@ -42,6 +42,7 @@ const statusBadge = (status: RotaStatus) => {
       return styles.badge;
   }
 };
+const ADMIN_PROFILE_NAME = "Administrador";
 // Monta links para Google Maps dividindo em blocos de atÇ¸ 10 pontos (origem + paradas)
 const buildMapsLinks = (
   coords: { latitude: number; longitude: number }[],
@@ -80,8 +81,9 @@ export default function RotasPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { data: session } = useSession();
-  const isAdmin = !!session?.user?.is_superuser;
-  const roleLabel = isAdmin ? "Administrador" : session?.user?.profile?.name || "Usuário padrão";
+  const profileName = session?.user?.profile?.name;
+  const isAdmin = Boolean(session?.user?.is_superuser || profileName === ADMIN_PROFILE_NAME);
+  const roleLabel = isAdmin ? ADMIN_PROFILE_NAME : profileName || "Usuário padrão";
   const deniedAccess = searchParams?.get("acesso") === "negado";
   const isDefaultProfile = !!session?.user?.profile?.is_default;
   const [rotas, setRotas] = useState<Rota[]>([]);
@@ -241,6 +243,15 @@ export default function RotasPage() {
     return resp.json();
   };
 
+  const blockUnauthorizedAction = (message: string) => {
+    setError(message);
+    setStatusFeedback(null);
+  };
+
+  const canEditOrDeleteRoute = (rota: Rota) => {
+    return isAdmin || rota.status === "PLANEJADA";
+  };
+
   const abrirEdicao = async (rotaId: number) => {
     let rotaInfo = rotas.find((r) => r.id === rotaId);
     if (!rotaInfo) {
@@ -251,6 +262,14 @@ export default function RotasPage() {
     const dataIso = data.slice(0, 10);
     setEditingErrors(null);
     setEditingRota({ id: rotaInfo.id, data_rota: dataIso, capacidade_max: Number(rotaInfo.capacidade_max) || 0 });
+  };
+
+  const handleEditRoute = (rota: Rota) => {
+    if (!canEditOrDeleteRoute(rota)) {
+      blockUnauthorizedAction("Rotas em execução ou finalizadas só podem ser editadas por administradores.");
+      return;
+    }
+    abrirEdicao(rota.id);
   };
 
   const salvarEdicao = async (event: FormEvent) => {
@@ -301,6 +320,14 @@ export default function RotasPage() {
     } finally {
       setDeletingRotaId(null);
     }
+  };
+
+  const handleDeleteRoute = (rota: Rota) => {
+    if (!canEditOrDeleteRoute(rota)) {
+      blockUnauthorizedAction("Somente rotas planejadas podem ser excluídas pelo seu perfil.");
+      return;
+    }
+    excluirRota(rota.id);
   };
 
   const rotaParam = searchParams?.get("rota");
@@ -602,21 +629,25 @@ export default function RotasPage() {
                     </td>
                     <td>
                       <div className={styles.actionsRow}>
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-                          onClick={() => abrirEdicao(rota.id)}
-                        >
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
-                          onClick={() => excluirRota(rota.id)}
-                          disabled={deletingRotaId === rota.id}
-                        >
-                          {deletingRotaId === rota.id ? "Excluindo..." : "Excluir"}
-                        </button>
+                        {canEditOrDeleteRoute(rota) ? (
+                          <>
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                              onClick={() => handleEditRoute(rota)}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                              onClick={() => handleDeleteRoute(rota)}
+                              disabled={deletingRotaId === rota.id}
+                            >
+                              {deletingRotaId === rota.id ? "Excluindo..." : "Excluir"}
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

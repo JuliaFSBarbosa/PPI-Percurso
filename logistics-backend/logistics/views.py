@@ -16,9 +16,12 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from accounts.constants import ADMIN_PROFILE_NAME
 
 from .filters import FamiliaFilter, PedidoFilter, ProdutoFilter
 from .ia.genetic_algorithm import calcular_distancia, otimizar_rota_pedidos
@@ -131,6 +134,51 @@ class PedidoCreateViewSet(viewsets.ModelViewSet):
 class RotaCreateViewSet(viewsets.ModelViewSet):
     queryset = Rota.objects.all()
     serializer_class = RotaCreateSerializer
+
+    def _user_is_editor(self, user):
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser:
+            return True
+        profile = getattr(user, "profile", None)
+        return bool(profile and profile.name == ADMIN_PROFILE_NAME)
+
+    def _payload_has_non_status_fields(self, request):
+        data = request.data
+        keys = set()
+        try:
+            keys = set(data.keys())
+        except Exception:
+            return False
+        return bool(keys - {"status"})
+
+    def _ensure_edit_allowed(self, request, rota):
+        if self._user_is_editor(request.user):
+            return
+        if not self._payload_has_non_status_fields(request):
+            return
+        if rota.status != "PLANEJADA":
+            raise PermissionDenied(
+                "Rotas em execução ou finalizadas só podem ser editadas por administradores."
+            )
+
+    def _ensure_delete_allowed(self, request, rota):
+        if self._user_is_editor(request.user):
+            return
+        if rota.status != "PLANEJADA":
+            raise PermissionDenied(
+                "Somente rotas planejadas podem ser excluídas pelo seu perfil."
+            )
+
+    def update(self, request, *args, **kwargs):
+        rota = self.get_object()
+        self._ensure_edit_allowed(request, rota)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        rota = self.get_object()
+        self._ensure_delete_allowed(request, rota)
+        return super().destroy(request, *args, **kwargs)
 
     def perform_update(self, serializer):
         rota_anterior = serializer.instance
