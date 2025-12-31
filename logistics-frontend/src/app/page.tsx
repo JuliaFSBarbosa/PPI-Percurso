@@ -1,8 +1,6 @@
 "use client";
 /*
   Página: Login
-  Objetivo: autenticar o usuário. Possui validação com Zod (CPF e senha),
-  mensagens em PT‑BR e integração via NextAuth Credentials.
 */
 import { Inter } from "next/font/google";
 import styles from "./page.module.css";
