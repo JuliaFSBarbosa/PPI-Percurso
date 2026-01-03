@@ -12,6 +12,7 @@ import RouteMapViewer from "@/components/RouteMapViewer";
 import { parseApiError } from "@/lib/apiError";
 import { statusLabels } from "@/constants/labels";
 const inter = InterFont({ subsets: ["latin"] });
+const PAGE_SIZE = 10;
 const defaultDeposito = { latitude: -27.3586, longitude: -53.3958 };
 const decimalFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
@@ -43,6 +44,8 @@ const statusBadge = (status: RotaStatus) => {
   }
 };
 const ADMIN_PROFILE_NAME = "Administrador";
+type SortKey = "id" | "data" | "total" | "peso" | "status";
+type SortDirection = "asc" | "desc";
 // Monta links para Google Maps dividindo em blocos de atÇ¸ 10 pontos (origem + paradas)
 const buildMapsLinks = (
   coords: { latitude: number; longitude: number }[],
@@ -112,7 +115,104 @@ export default function RotasPage() {
   const [editingErrors, setEditingErrors] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingRotaId, setDeletingRotaId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortKey, setSortKey] = useState<SortKey>("data");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const snapshotRef = useRef<HTMLDivElement | null>(null);
+  const totalCount = rotas.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE) || 1);
+  const canPrev = currentPage > 1;
+  const canNext = currentPage < totalPages;
+  const sortedRotas = useMemo(() => {
+    const sorted = [...rotas];
+    const direction = sortDirection === "asc" ? 1 : -1;
+    const getDateTimestamp = (rota: Rota) => {
+      const raw = rota.data_rota || rota.created_at;
+      if (!raw) return Number.NaN;
+      const date = new Date(raw);
+      return Number.isNaN(date.getTime()) ? Number.NaN : date.getTime();
+    };
+    const getStatusRank = (status: RotaStatus) => {
+      switch (status) {
+        case "PLANEJADA":
+          return 1;
+        case "EM_EXECUCAO":
+          return 2;
+        case "CONCLUIDA":
+          return 3;
+        default:
+          return 99;
+      }
+    };
+    const getSortValue = (rota: Rota) => {
+      switch (sortKey) {
+        case "id":
+          return Number(rota.id);
+        case "data":
+          return getDateTimestamp(rota);
+        case "total":
+          return Number(rota.total_pedidos ?? rota.pedidos?.length ?? 0);
+        case "peso":
+          return Number(rota.peso_total_pedidos ?? 0);
+        case "status":
+          return getStatusRank(rota.status);
+        default:
+          return "";
+      }
+    };
+    sorted.sort((a, b) => {
+      const valueA = getSortValue(a);
+      const valueB = getSortValue(b);
+      const aInvalid =
+        valueA === null ||
+        typeof valueA === "undefined" ||
+        (typeof valueA === "number" && Number.isNaN(valueA));
+      const bInvalid =
+        valueB === null ||
+        typeof valueB === "undefined" ||
+        (typeof valueB === "number" && Number.isNaN(valueB));
+      if (aInvalid || bInvalid) {
+        if (aInvalid && bInvalid) return 0;
+        return aInvalid ? 1 : -1;
+      }
+      const diff =
+        typeof valueA === "number" && typeof valueB === "number"
+          ? valueA - valueB
+          : String(valueA).localeCompare(String(valueB), "pt-BR", { sensitivity: "base" });
+      if (diff !== 0) return diff * direction;
+      return (Number(a.id) - Number(b.id)) * direction;
+    });
+    return sorted;
+  }, [rotas, sortDirection, sortKey]);
+  const displayedRotas = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return sortedRotas.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [currentPage, sortedRotas]);
+  const handleSortChange = (key: SortKey) => {
+    setSortDirection((prevDir) => (sortKey === key ? (prevDir === "asc" ? "desc" : "asc") : "asc"));
+    setSortKey(key);
+    setCurrentPage(1);
+  };
+  const buildSortLabel = (label: string, key: SortKey) => {
+    const isActive = sortKey === key;
+    const indicator = isActive ? (sortDirection === "asc" ? "▲" : "▼") : "";
+    const ariaSort = isActive ? (sortDirection === "asc" ? "ascending" : "descending") : "none";
+    return (
+      <th aria-sort={ariaSort}>
+        <button
+          type="button"
+          className={`${styles.tableSortButton} ${isActive ? styles.tableSortButtonActive : ""}`}
+          onClick={() => handleSortChange(key)}
+          aria-label={`Ordenar por ${label} (${isActive ? (sortDirection === "asc" ? "crescente" : "decrescente") : "sem ordenação"})`}
+        >
+          <span>{label}</span>
+          <span className={styles.tableSortIndicator} aria-hidden>
+            {indicator}
+          </span>
+        </button>
+      </th>
+    );
+  };
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const ensureHtml2Canvas = async () => {
     if (typeof window === "undefined") return null;
@@ -169,6 +269,11 @@ export default function RotasPage() {
       active = false;
     };
   }, [reloadKey]);
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
   const fetchRotaDetail = async (rotaId: number): Promise<Rota | null> => {
     try {
       const dResp = await fetch(`/api/proxy/rotas/${rotaId}`, { cache: "no-store" });
@@ -427,11 +532,11 @@ export default function RotasPage() {
           <table>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Data</th>
-                <th>Total pedidos</th>
-                <th>Peso total</th>
-                <th>Status</th>
+                {buildSortLabel("ID", "id")}
+                {buildSortLabel("Data", "data")}
+                {buildSortLabel("Total pedidos", "total")}
+                {buildSortLabel("Peso total", "peso")}
+                {buildSortLabel("Status", "status")}
                 <th>Mapa</th>
                 <th>Relatório</th>
                 <th>Pedidos</th>
@@ -450,7 +555,7 @@ export default function RotasPage() {
                 </tr>
               )}
               {!loading &&
-                rotas.map((rota) => (
+                displayedRotas.map((rota) => (
                   <tr key={rota.id}>
                     <td>{rota.id}</td>
                     <td>{formatDate(rota.created_at || rota.data_rota)}</td>
@@ -628,7 +733,7 @@ export default function RotasPage() {
                       </div>
                     </td>
                     <td>
-                      <div className={styles.actionsRow}>
+                      <div className={`${styles.actionsRow} ${styles.actionsInline}`}>
                         {canEditOrDeleteRoute(rota) ? (
                           <>
                             <button
@@ -654,6 +759,33 @@ export default function RotasPage() {
                 ))}
             </tbody>
           </table>
+          {!loading && (
+            <div className={styles.tableFooter}>
+              <span className={styles.muted}>
+                Página {currentPage} de {totalPages} ({totalCount} registros)
+              </span>
+              <div className={styles.paginationActions}>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                  disabled={!canPrev}
+                  aria-label="Página anterior"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                >
+                  &lt;
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.ghost} ${styles.sm}`}
+                  disabled={!canNext}
+                  aria-label="Próxima página"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                >
+                  &gt;
+                </button>
+              </div>
+            </div>
+          )}
           {modalPedidos && (
             <div
               style={{
