@@ -27,6 +27,18 @@ type PaginationProps = {
   onNext: () => void;
 };
 
+type SortKey =
+  | "id"
+  | "nf"
+  | "cliente"
+  | "cidade"
+  | "data"
+  | "itens"
+  | "peso"
+  | "volume"
+  | "status";
+type SortDirection = "asc" | "desc";
+
 type Props = {
   pedidos: PedidoLinha[];
   selectedIds: number[];
@@ -37,6 +49,9 @@ type Props = {
   deletingId: number | null;
   loading: boolean;
   formatDateBR: (value: any) => string;
+  sortKey: SortKey;
+  sortDirection: SortDirection;
+  onSortChange: (key: SortKey) => void;
   pagination?: PaginationProps;
 };
 
@@ -50,9 +65,32 @@ export function OrdersTable({
   deletingId,
   loading,
   formatDateBR,
+  sortKey,
+  sortDirection,
+  onSortChange,
   pagination,
 }: Props) {
   const allSelected = pedidos.length > 0 && selectedIds.length === pedidos.length;
+  const buildSortLabel = (label: string, key: SortKey) => {
+    const isActive = sortKey === key;
+    const indicator = isActive ? (sortDirection === "asc" ? "▲" : "▼") : "";
+    const ariaSort = isActive ? (sortDirection === "asc" ? "ascending" : "descending") : "none";
+    return (
+      <th aria-sort={ariaSort}>
+        <button
+          type="button"
+          className={`${styles.tableSortButton} ${isActive ? styles.tableSortButtonActive : ""}`}
+          onClick={() => onSortChange(key)}
+          aria-label={`Ordenar por ${label} (${isActive ? (sortDirection === "asc" ? "crescente" : "decrescente") : "sem ordenação"})`}
+        >
+          <span>{label}</span>
+          <span className={styles.tableSortIndicator} aria-hidden>
+            {indicator}
+          </span>
+        </button>
+      </th>
+    );
+  };
 
   return (
     <section className={`${styles.card} ${styles.table}`}>
@@ -71,15 +109,15 @@ export function OrdersTable({
                 onChange={(e) => onToggleSelectAll(e.target.checked)}
               />
             </th>
-            <th>ID</th>
-            <th>NF</th>
-            <th>Cliente</th>
-            <th>Cidade</th>
-            <th>Data</th>
-            <th>Itens</th>
-            <th>Peso total</th>
-            <th>Volume total</th>
-            <th>Status da rota</th>
+            {buildSortLabel("ID", "id")}
+            {buildSortLabel("NF", "nf")}
+            {buildSortLabel("Cliente", "cliente")}
+            {buildSortLabel("Cidade", "cidade")}
+            {buildSortLabel("Data", "data")}
+            {buildSortLabel("Itens", "itens")}
+            {buildSortLabel("Peso total", "peso")}
+            {buildSortLabel("Volume total", "volume")}
+            {buildSortLabel("Status da rota", "status")}
             <th />
           </tr>
         </thead>
@@ -148,7 +186,7 @@ export function OrdersTable({
                   <span className={badgeClass}>{badgeText}</span>
                 </td>
                 <td>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "nowrap" }}>
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.ghost} ${styles.sm}`}

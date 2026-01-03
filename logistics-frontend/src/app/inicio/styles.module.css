@@ -396,6 +396,27 @@
   border-bottom:1px solid var(--table-divider);
   font-size:14px;
 }
+.tableSortButton{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  width:100%;
+  justify-content:center;
+  background:transparent;
+  border:none;
+  padding:0;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
+.tableSortButtonActive{
+  font-weight:600;
+}
+.tableSortIndicator{
+  min-width:12px;
+  text-align:center;
+  color:var(--muted);
+}
 .table th:first-child,
 .table td:first-child{
   text-align:left;

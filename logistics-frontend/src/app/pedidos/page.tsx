@@ -13,6 +13,7 @@ import { OrdersTable } from "@/components/pedidos/OrdersTable";
 import styles from "../inicio/styles.module.css";
 import { parseApiError } from "@/lib/apiError";
 import { AppSidebar } from "@/components/navigation/AppSidebar";
+import { statusLabels } from "@/constants/labels";
 
 const inter = InterFont({ subsets: ["latin"] });
 const API_PAGE_SIZE = 200;
@@ -90,6 +91,17 @@ type PedidoEnriquecido = Pedido & {
   cidade?: string;
   rota?: number | null;
 };
+type SortKey =
+  | "id"
+  | "nf"
+  | "cliente"
+  | "cidade"
+  | "data"
+  | "itens"
+  | "peso"
+  | "volume"
+  | "status";
+type SortDirection = "asc" | "desc";
 const isPedidoEntregue = (pedido: any) => {
   const rotas = Array.isArray((pedido as any).rotas) ? (pedido as any).rotas : [];
   if (rotas.length === 0) return false;
@@ -103,6 +115,20 @@ const isPedidoEmRotaAtiva = (pedido: any) => {
   }
   const rotaDireta = (pedido as any).rota;
   return typeof rotaDireta !== "undefined" && rotaDireta !== null;
+};
+
+const getPedidoStatusInfo = (pedido: PedidoEnriquecido) => {
+  const rotas = Array.isArray((pedido as any).rotas) ? (pedido as any).rotas : [];
+  const possuiResumoRota = pedido.rota !== null && typeof pedido.rota !== "undefined";
+  if (rotas.length > 0) {
+    const todasConcluidas = rotas.every((rota: any) => rota.status === "CONCLUIDA");
+    const algumaExecucao = rotas.some((rota: any) => rota.status === "EM_EXECUCAO");
+    if (todasConcluidas) return { label: statusLabels.CONCLUIDA, rank: 3 };
+    if (algumaExecucao) return { label: statusLabels.EM_EXECUCAO, rank: 2 };
+    return { label: statusLabels.PLANEJADA, rank: 1 };
+  }
+  if (possuiResumoRota) return { label: "Rota vinculada", rank: 4 };
+  return { label: "Pendente", rank: 0 };
 };
 
 export default function PedidosPage() {
@@ -127,12 +153,14 @@ export default function PedidosPage() {
 const [raioKm, setRaioKm] = useState(RAIO_OPTIONS[0]);
 const [aplicandoRaio, setAplicandoRaio] = useState(false);
 const [raioErro, setRaioErro] = useState<string | null>(null);
-const [raioInfo, setRaioInfo] = useState<string | null>(null);
+  const [raioInfo, setRaioInfo] = useState<string | null>(null);
 const [loadingMore, setLoadingMore] = useState(false);
 const [restricoesFamilias, setRestricoesFamilias] = useState<RestricaoFamilia[]>([]);
 const [carregandoRestricoes, setCarregandoRestricoes] = useState(false);
 const [restricoesErro, setRestricoesErro] = useState<string | null>(null);
 const [familiaAlert, setFamiliaAlert] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("data");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const handleDepositoChange = (field: "latitude" | "longitude") => (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -503,21 +531,74 @@ const [familiaAlert, setFamiliaAlert] = useState<string | null>(null);
     [descreverConflitoFamilias]
   );
 
+  const handleSortChange = useCallback(
+    (key: SortKey) => {
+      setSortDirection((prevDir) => (sortKey === key ? (prevDir === "asc" ? "desc" : "asc") : "asc"));
+      setSortKey(key);
+      setDisplayPage(1);
+    },
+    [sortKey]
+  );
+
   const sortedPedidos = useMemo<PedidoEnriquecido[]>(() => {
     const sorted = [...pedidosWithTotals];
+    const direction = sortDirection === "asc" ? 1 : -1;
+    const getPedidoTimestamp = (pedido: PedidoEnriquecido) => {
+      const parsed = parsePedidoDateToTimestamp(pedido.dtpedido);
+      if (typeof parsed === "number" && !Number.isNaN(parsed)) return parsed;
+      const created = parseDateTimeToTimestamp((pedido as any).created_at ?? pedido.dtpedido);
+      return Number.isNaN(created) ? Number.NaN : created;
+    };
+    const getSortValue = (pedido: PedidoEnriquecido) => {
+      switch (sortKey) {
+        case "id":
+          return normalizeId(pedido.id);
+        case "nf": {
+          const nfNum = Number(pedido.nf);
+          return Number.isFinite(nfNum) ? nfNum : (pedido.nf ?? "").toString();
+        }
+        case "cliente":
+          return (pedido.cliente ?? "").toString();
+        case "cidade":
+          return (pedido.cidade ?? "").toString();
+        case "data":
+          return getPedidoTimestamp(pedido);
+        case "itens":
+          return Number(pedido._totalItens ?? 0);
+        case "peso":
+          return Number(pedido._pesoTotal ?? 0);
+        case "volume":
+          return Number(pedido._volumeTotal ?? 0);
+        case "status":
+          return getPedidoStatusInfo(pedido).rank;
+        default:
+          return "";
+      }
+    };
     sorted.sort((a, b) => {
-      const createdB = parseDateTimeToTimestamp((b as any).created_at ?? b.dtpedido);
-      const createdA = parseDateTimeToTimestamp((a as any).created_at ?? a.dtpedido);
-      const tsB = !Number.isNaN(createdB) ? createdB : parsePedidoDateToTimestamp(b.dtpedido);
-      const tsA = !Number.isNaN(createdA) ? createdA : parsePedidoDateToTimestamp(a.dtpedido);
-      const valueB = typeof tsB === "number" && !Number.isNaN(tsB) ? tsB : normalizeId(b.id);
-      const valueA = typeof tsA === "number" && !Number.isNaN(tsA) ? tsA : normalizeId(a.id);
-      const diff = valueB - valueA;
-      if (diff !== 0) return diff;
-      return normalizeId(b.id) - normalizeId(a.id);
+      const valueA = getSortValue(a);
+      const valueB = getSortValue(b);
+      const aInvalid =
+        valueA === null ||
+        typeof valueA === "undefined" ||
+        (typeof valueA === "number" && Number.isNaN(valueA));
+      const bInvalid =
+        valueB === null ||
+        typeof valueB === "undefined" ||
+        (typeof valueB === "number" && Number.isNaN(valueB));
+      if (aInvalid || bInvalid) {
+        if (aInvalid && bInvalid) return 0;
+        return aInvalid ? 1 : -1;
+      }
+      const diff =
+        typeof valueA === "number" && typeof valueB === "number"
+          ? valueA - valueB
+          : String(valueA).localeCompare(String(valueB), "pt-BR", { sensitivity: "base" });
+      if (diff !== 0) return diff * direction;
+      return (normalizeId(a.id) - normalizeId(b.id)) * direction;
     });
     return sorted;
-  }, [pedidosWithTotals]);
+  }, [pedidosWithTotals, sortKey, sortDirection]);
 
   const displayedPedidos = useMemo<PedidoEnriquecido[]>(() => {
     const startIndex = Math.max(0, (displayPage - 1) * DISPLAY_PAGE_SIZE);
@@ -940,6 +1021,9 @@ const [familiaAlert, setFamiliaAlert] = useState<string | null>(null);
           deletingId={deletingId}
           loading={loading}
           formatDateBR={formatDateBR}
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSortChange={handleSortChange}
           pagination={{
             currentPage: displayPage,
             totalPages,
