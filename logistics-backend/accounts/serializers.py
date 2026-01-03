@@ -9,16 +9,20 @@ class ProfileSerializer(serializers.ModelSerializer):
         allow_empty=True,
         required=False,
     )
+    feature_permissions = serializers.DictField(
+        child=serializers.ListField(child=serializers.CharField()),
+        required=False,
+    )
 
     class Meta:
         model = Profile
-        fields = ["id", "name", "permissions", "is_default"]
+        fields = ["id", "name", "permissions", "feature_permissions", "is_default"]
         read_only_fields = ["id", "is_default"]
 
 
 class ProfileDetailSerializer(ProfileSerializer):
     class Meta(ProfileSerializer.Meta):
-        fields = ["id", "name", "permissions", "is_default", "created_at"]
+        fields = ["id", "name", "permissions", "feature_permissions", "is_default", "created_at"]
         read_only_fields = ["id", "is_default", "created_at"]
 
 

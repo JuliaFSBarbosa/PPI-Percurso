@@ -253,6 +253,7 @@
 .inlineField{ flex-direction:row; align-items:center; gap:10px; }
 .inlineField label{ margin:0 0 0 8px; }
 .inlineField input[type="checkbox"]{ width:auto; height:18px; }
+.inlineField input[type="checkbox"]{ margin-right:8px; }
 .cards3{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 .checkboxField{
   display:flex;
@@ -263,7 +264,35 @@
 .checkboxField input{
   margin:0;
 }
+.permissionGroup{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--card-border);
+  background:var(--panel);
+}
+.permissionGroup .inlineField{
+  gap:10px;
+}
+.featureList{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:6px;
+  padding-left:18px;
+}
+.featureItem{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:13px;
+  color:var(--muted);
+}
 .profileCard .btn {
+  margin-bottom: 12px;
+}
+.backButton{
   margin-bottom: 12px;
 }
 

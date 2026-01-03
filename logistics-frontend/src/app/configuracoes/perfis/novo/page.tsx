@@ -17,9 +17,14 @@ export default function NovoPerfilPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const [screens, setScreens] = useState<ScreenDefinitionDTO[]>([]);
-  const [form, setForm] = useState<{ name: string; permissions: ScreenId[] }>({
+  const [form, setForm] = useState<{
+    name: string;
+    permissions: ScreenId[];
+    feature_permissions: Partial<Record<ScreenId, string[]>>;
+  }>({
     name: "",
     permissions: [],
+    feature_permissions: {},
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,11 +66,40 @@ export default function NovoPerfilPage() {
   const togglePermission = (screenId: ScreenId) => {
     setForm((prev) => {
       const exists = prev.permissions.includes(screenId);
+      const nextFeaturePermissions = { ...prev.feature_permissions };
+      if (exists) {
+        delete nextFeaturePermissions[screenId];
+      }
       return {
         ...prev,
         permissions: exists
           ? prev.permissions.filter((permission) => permission !== screenId)
           : [...prev.permissions, screenId],
+        feature_permissions: nextFeaturePermissions,
+      };
+    });
+  };
+
+  const toggleFeature = (screenId: ScreenId, featureId: string) => {
+    setForm((prev) => {
+      const current = prev.feature_permissions[screenId] ?? [];
+      const exists = current.includes(featureId);
+      const nextFeatures = exists
+        ? current.filter((feature) => feature !== featureId)
+        : [...current, featureId];
+      const nextFeaturePermissions = { ...prev.feature_permissions };
+      if (nextFeatures.length) {
+        nextFeaturePermissions[screenId] = nextFeatures;
+      } else {
+        delete nextFeaturePermissions[screenId];
+      }
+      const nextPermissions = prev.permissions.includes(screenId)
+        ? prev.permissions
+        : [...prev.permissions, screenId];
+      return {
+        ...prev,
+        permissions: nextPermissions,
+        feature_permissions: nextFeaturePermissions,
       };
     });
   };
@@ -80,7 +114,11 @@ export default function NovoPerfilPage() {
     }
     setSubmitting(true);
     try {
-      await saveProfile({ name: form.name.trim(), permissions: form.permissions });
+      await saveProfile({
+        name: form.name.trim(),
+        permissions: form.permissions,
+        feature_permissions: form.feature_permissions,
+      });
       setMessage("Perfil criado com sucesso.");
       setTimeout(() => router.push("/configuracoes/perfis"), 1200);
     } catch (err) {
@@ -125,7 +163,10 @@ export default function NovoPerfilPage() {
         </header>
 
         <section className={styles.card}>
-          <button className={`${styles.btn} ${styles.ghost} ${styles.sm}`} onClick={() => router.back()}>
+          <button
+            className={`${styles.btn} ${styles.ghost} ${styles.sm} ${styles.backButton}`}
+            onClick={() => router.back()}
+          >
             Voltar
           </button>
 
@@ -152,14 +193,30 @@ export default function NovoPerfilPage() {
               {!loading && screens.length > 0 && (
                 <div className={styles.cards3}>
                   {screens.map((screen) => (
-                    <label key={screen.id} className={styles.inlineField}>
-                      <input
-                        type="checkbox"
-                        checked={form.permissions.includes(screen.id)}
-                        onChange={() => togglePermission(screen.id)}
-                      />
-                      {screen.label}
-                    </label>
+                    <div key={screen.id} className={styles.permissionGroup}>
+                      <label className={styles.inlineField}>
+                        <input
+                          type="checkbox"
+                          checked={form.permissions.includes(screen.id)}
+                          onChange={() => togglePermission(screen.id)}
+                        />
+                        {screen.label}
+                      </label>
+                      {!!screen.features?.length && (
+                        <div className={styles.featureList}>
+                          {screen.features.map((feature) => (
+                            <label key={`${screen.id}-${feature.id}`} className={styles.featureItem}>
+                              <input
+                                type="checkbox"
+                                checked={form.feature_permissions[screen.id]?.includes(feature.id) ?? false}
+                                onChange={() => toggleFeature(screen.id, feature.id)}
+                              />
+                              {feature.label}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}

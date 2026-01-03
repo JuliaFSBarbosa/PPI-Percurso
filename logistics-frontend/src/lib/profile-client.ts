@@ -1,10 +1,16 @@
 import { ScreenId } from "@/constants/screens";
 import { parseApiError } from "@/lib/apiError";
 
+export type ScreenFeatureDefinitionDTO = {
+  id: string;
+  label: string;
+};
+
 export type ScreenDefinitionDTO = {
   id: ScreenId;
   label: string;
   routes: string[];
+  features?: ScreenFeatureDefinitionDTO[];
 };
 
 export const fetchProfiles = async (): Promise<UserProfile[]> => {
@@ -36,11 +42,15 @@ export const fetchProfileScreens = async (): Promise<ScreenDefinitionDTO[]> => {
     throw new Error(parseApiError(text, "Falha ao carregar telas disponíveis.", resp.status));
   }
   const parsed = text ? JSON.parse(text) : null;
-  return (parsed?.screens as ScreenDefinitionDTO[]) ?? [];
+  if (Array.isArray(parsed)) return parsed as ScreenDefinitionDTO[];
+  if (Array.isArray(parsed?.screens)) return parsed.screens as ScreenDefinitionDTO[];
+  if (Array.isArray(parsed?.data)) return parsed.data as ScreenDefinitionDTO[];
+  if (Array.isArray(parsed?.data?.screens)) return parsed.data.screens as ScreenDefinitionDTO[];
+  return [];
 };
 
 export const saveProfile = async (
-  payload: { name: string; permissions: ScreenId[] },
+  payload: { name: string; permissions: ScreenId[]; feature_permissions?: Partial<Record<ScreenId, string[]>> },
   profileId?: number
 ) => {
   const endpoint = profileId ? `/api/proxy/perfis/${profileId}` : "/api/proxy/perfis";

@@ -4,6 +4,7 @@ type UserProfile = {
     id: number;
     name: string;
     permissions: ScreenId[];
+    feature_permissions?: Partial<Record<ScreenId, string[]>>;
     is_default?: boolean;
 }
 

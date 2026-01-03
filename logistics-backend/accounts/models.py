@@ -5,8 +5,11 @@ from accounts.constants import (
     SCREEN_DEFINITIONS,
     DEFAULT_PROFILE_NAME,
     DEFAULT_PROFILE_PERMISSIONS,
+    DEFAULT_PROFILE_FEATURE_PERMISSIONS,
     ADMIN_PROFILE_NAME,
     ADMIN_PROFILE_PERMISSIONS,
+    ADMIN_PROFILE_FEATURE_PERMISSIONS,
+    SCREEN_FEATURES,
 )
 
 
@@ -20,9 +23,29 @@ def sanitize_permissions(values):
     return sanitized
 
 
+def sanitize_feature_permissions(values, allowed_screens):
+    if not isinstance(values, dict):
+        return {}
+    sanitized = {}
+    for screen_id, features in values.items():
+        if screen_id not in SCREEN_IDS or screen_id not in allowed_screens:
+            continue
+        if not isinstance(features, (list, tuple)):
+            continue
+        valid_features = SCREEN_FEATURES.get(screen_id, [])
+        cleaned = []
+        for feature_id in features:
+            if feature_id in valid_features and feature_id not in cleaned:
+                cleaned.append(feature_id)
+        if cleaned:
+            sanitized[screen_id] = cleaned
+    return sanitized
+
+
 class Profile(models.Model):
     name = models.CharField(max_length=80, unique=True)
     permissions = models.JSONField(default=list, blank=True)
+    feature_permissions = models.JSONField(default=dict, blank=True)
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -35,6 +58,10 @@ class Profile(models.Model):
 
     def save(self, *args, **kwargs):
         self.permissions = sanitize_permissions(self.permissions or [])
+        self.feature_permissions = sanitize_feature_permissions(
+            self.feature_permissions or {},
+            self.permissions,
+        )
         super().save(*args, **kwargs)
         if self.is_default:
             Profile.objects.exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
@@ -45,12 +72,16 @@ class Profile(models.Model):
             name=DEFAULT_PROFILE_NAME,
             defaults={
                 "permissions": DEFAULT_PROFILE_PERMISSIONS,
+                "feature_permissions": DEFAULT_PROFILE_FEATURE_PERMISSIONS,
                 "is_default": True,
             },
         )
         updated = False
         if profile.permissions != DEFAULT_PROFILE_PERMISSIONS:
             profile.permissions = DEFAULT_PROFILE_PERMISSIONS
+            updated = True
+        if profile.feature_permissions != DEFAULT_PROFILE_FEATURE_PERMISSIONS:
+            profile.feature_permissions = DEFAULT_PROFILE_FEATURE_PERMISSIONS
             updated = True
         if not profile.is_default:
             profile.is_default = True
@@ -65,12 +96,16 @@ class Profile(models.Model):
             name=ADMIN_PROFILE_NAME,
             defaults={
                 "permissions": ADMIN_PROFILE_PERMISSIONS,
+                "feature_permissions": ADMIN_PROFILE_FEATURE_PERMISSIONS,
                 "is_default": False,
             },
         )
         updated = False
         if profile.permissions != ADMIN_PROFILE_PERMISSIONS:
             profile.permissions = ADMIN_PROFILE_PERMISSIONS
+            updated = True
+        if profile.feature_permissions != ADMIN_PROFILE_FEATURE_PERMISSIONS:
+            profile.feature_permissions = ADMIN_PROFILE_FEATURE_PERMISSIONS
             updated = True
         if profile.is_default:
             profile.is_default = False
